@@ -198,10 +198,8 @@ app.get('/simreg', function(req, res) {
 	res.render("simreg", 
 		{ title: 'Enter Device info', 
 		  defaults: {
-		  	sf_contact_id: '',
-		  	sf_device_id: '',
+		  	sf_user_id: '',
 		  	sf_org_id: '',
-		  	qc_device_guid: ''
 		  }
 		} );
 });
@@ -209,9 +207,7 @@ app.get('/simreg', function(req, res) {
 app.post('/register', function(req, res) {
 
 	var dev = {
-		sf_contact_id: req.body.sf_contact_id || '',		
-		sf_device_id: req.body.sf_device_id || '',
-		qc_device_guid: req.body.qc_device_guid || '',
+		sf_user_id: req.body.sf_user_id || '',		
 		sf_org_id: req.body.sf_org_id || ''
 	};
 
@@ -223,40 +219,31 @@ app.post('/register', function(req, res) {
 			return;
 		}
 		
-	
-		client.query('UPDATE "Qualcomm".devices SET  sf_contact_id=$1, sf_device_id=$2, sf_org_id=$3 WHERE qc_device_guid=$4', [dev.sf_contact_id, dev.sf_device_id, dev.sf_org_id, dev.qc_device_guid], function(err, result) { 
 
-			if (err) {
-				console.log('attempting update of Qualcomm devices failed, err: ' + JSON.stringify(err) + ', result: ' + JSON.stringify(result));
-				res.send(500, {status:500, message: 'Unable to update devices in postgres db.', type:'internal'});
-				return;
-			}
+			// just attempt insert; if record already exists ignore error
+			client.query('INSERT INTO "Qualcomm".devices(sf_user_id, sf_org_id) ' +
+				'VALUES ($1, $2)', 
+				[dev.sf_user_id, dev.sf_org_id], 
+				function(err, result) {
+					done(); // release client back to the pool
+					if (err) {	
+						console.log('Error inserting device: ' + JSON.stringify(err));	
+						//res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
+						debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
+						return;
+					} else {
+				
+						console.log('Device inserted: ' + JSON.stringify(dev));													
+					} 
+			});	
 
-			if (result.rowCount == 0) {
-				// no rows exist with this QC device guid, so insert record
-				client.query('INSERT INTO "Qualcomm".devices(sf_contact_id, sf_device_id, qc_device_guid, sf_org_id) ' +
-					'VALUES ($1, $2, $3, $4)', 
-					[dev.sf_contact_id, dev.sf_device_id, dev.qc_device_guid, dev.sf_org_id], 
-					function(err, result) {
-						done(); // release client back to the pool
-						if (err) {	
-							console.log('Error inserting device: ' + JSON.stringify(err));	
-							res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
-							return;
-						} else {
-					
-							console.log('Device inserted: ' + JSON.stringify(dev));													
-						} 
-				});	
-			} else
-			{
-				console.log('Device updated: ' + JSON.stringify(dev));
-			}
-		});		
+	});		
 
-  }); // pgConnect
+
   res.send(200, {status:200, message: 'Device registration successful', dev: JSON.stringify(dev)});
 });
+
+
 
 // insertMeasure may refresh oauthElement
 // insertMeasure(category, ..., oauthElement, function(err, measureId, refreshedOauthElement) ...
@@ -350,18 +337,17 @@ app.get('/Notification', function(req, res) {
 
 	var notification = {
 		id: '',
-		sf_contact_id: req.query.guid,
+		sf_user_id: req.query.guid,
 		trackGuid: req.query.trackGuid,
 		trackName: req.query.trackName,
 		category: req.query.category,
 		startDate: req.query.startDate,
 		endDate: req.query.endDate,
-		sf_device_id: '',
 		sf_org_id: '',
 		url: req.url
 	};
 	console.log('partially initialized notification record: ' + JSON.stringify(notification));
-
+/*
   //retrieve registered device record from postgres
   // todo - cache registered devices
   pg.connect(pgConnectionString, function(err, client, done) {
@@ -369,8 +355,8 @@ app.get('/Notification', function(req, res) {
 		console.log('Handling /Notification, unable to connect to postgres db. ' + JSON.stringify(err));
 		return;
 	}
-	client.query('SELECT devices.sf_contact_id, devices.sf_device_id, devices.qc_device_guid, devices.sf_org_id FROM "Qualcomm".devices WHERE devices.qc_device_guid = $1',
-		[notification.trackGuid], 
+	client.query('SELECT devices.sf_org_id FROM "Qualcomm".devices WHERE devices.sf_user_id = $1',
+		[notification.sf_user_id], 
 		function(err, result) {
 			if (err) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
@@ -478,6 +464,8 @@ app.get('/Notification', function(req, res) {
 			});	// client query insert	
 		}); // client query select
 	}); // pgConnect
+	
+	*/
 });
 
 
