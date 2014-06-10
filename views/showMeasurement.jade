@@ -1,0 +1,9 @@
+// fields NOT to be displayed	
+- var skipFields = ['attributes','IsDeleted','setExternalId','getFieldValues','getId','fieldValues'];
+h1= title
+p Number of measurements: #{data[0].totalSize}
+ul
+  each val, key in data[1]._fields
+    li #{key}: #{val}
+
+      

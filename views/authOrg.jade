@@ -1,0 +1,13 @@
+h1= title
+form(method='post', action='/authenticate')
+  div
+    label Salesforce Org Id:
+      input(name='org_id', value='#{defaults.orgId}', type='text')
+  div
+    label Client Key:
+      input(name='client_key', value='#{defaults.clientId}', type='text')
+  div
+    label Client Secret:
+      input(name='client_secret', value='#{defaults.clientSecret}', type='text')
+  div
+    input(type='submit', value='Authenticate')

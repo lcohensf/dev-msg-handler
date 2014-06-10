@@ -1,0 +1,16 @@
+h1= title
+form(method='post', action='/Register')
+  div
+    label SF Contact ID:
+      input(name='sf_contact_id', value='#{defaults.sf_contact_id}', type='text')
+  div
+    label SF Device ID:
+      input(name='sf_device_id', value='#{defaults.sf_device_id}', type='text')
+  div
+    label SF Org ID:
+      input(name='sf_org_id', value='#{defaults.sf_org_id}', type='text')
+  div
+    label Qualcomm Device GUID:
+      input(name='qc_device_guid', value='#{defaults.qc_device_guid}', type='text')
+  div
+    input(type='submit', value='Register')
