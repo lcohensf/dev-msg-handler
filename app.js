@@ -247,7 +247,7 @@ app.post('/register', function(req, res) {
 
 // insertMeasure may refresh oauthElement
 // insertMeasure(category, ..., oauthElement, function(err, measureId, refreshedOauthElement) ...
-function insertMeasure(category, sf_contact_id, sf_device_id, notificationId, aMeasureResponse, oauthElement, callback) {
+function insertMeasure(category, sf_user_id, trackGuid, notificationId, aMeasureResponse, oauthElement, callback) {
 	var aMeasure;						
 	
 	if (category == 'blood') {
@@ -260,9 +260,9 @@ function insertMeasure(category, sf_contact_id, sf_device_id, notificationId, aM
 			Pulse__c: aMR.blood.pulse,
 			systolic__c: aMR.blood.systolic,
 			spo2__c: aMR.blood.spo2,
-			contact__c: sf_contact_id,
-			device__c: sf_device_id,
-			Unique_Key__c: sf_contact_id+':'+sf_device_id+':'+aMR.time+':'+notificationId,
+			Device__r : { GUID__c: trackGuid }, 
+			Health__r : { GUID__c: sf_user_id}, 
+			Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
 			Debug_Measurement__c: JSON.stringify(aMeasureResponse)				
 		};
 	}
@@ -277,10 +277,10 @@ function insertMeasure(category, sf_contact_id, sf_device_id, notificationId, aM
 			Distance__c: aAR.distance,
 			Calories__c: aAR.calories,
 			Duration__c: aAR.duration,
-			contact__c: sf_contact_id,
-			device__c: sf_device_id,
+			Device__r : { GUID__c: trackGuid }, 
+			Health__r : { GUID__c: sf_user_id},
 			type__c: aAR.type,
-			Unique_Key__c: sf_contact_id+':'+sf_device_id+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
+			Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
 			Debug_Measurement__c: JSON.stringify(aMeasureResponse)		
 		};
 
@@ -290,9 +290,9 @@ function insertMeasure(category, sf_contact_id, sf_device_id, notificationId, aM
 		aMeasure = {
 			Date_Time__c: aMR.time * 1000,
         	weight__c: aMR.body.weight,
-			contact__c: sf_contact_id,
-			device__c: sf_device_id,
-        	Unique_Key__c: sf_contact_id+':'+sf_device_id+':'+aMR.time+':'+notificationId,
+			Device__r : { GUID__c: trackGuid }, 
+			Health__r : { GUID__c: sf_user_id},
+        	Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
 			Debug_Measurement__c: JSON.stringify(aMeasureResponse)
 		};	
 	}
@@ -347,7 +347,7 @@ app.get('/Notification', function(req, res) {
 		url: req.url
 	};
 	console.log('partially initialized notification record: ' + JSON.stringify(notification));
-/*
+
   //retrieve registered device record from postgres
   // todo - cache registered devices
   pg.connect(pgConnectionString, function(err, client, done) {
@@ -362,11 +362,10 @@ app.get('/Notification', function(req, res) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
 				return;
 			}
-			if (result.rows.length < 1 || result.rows[0].sf_contact_id != notification.sf_contact_id) {
-				console.log('Handling /Notification, notification message guid does not match registered contact id for device. Device record: ' + result.rows[0]);
+			if (result.rows.length < 1) {
+				console.log('Handling /Notification, the user for this device notification is not registered: ' + notification.sf_user_id);
 				return;
 			}
-			notification.sf_device_id = result.rows[0].sf_device_id;
 			notification.sf_org_id = result.rows[0].sf_org_id;
 			console.log('result: ' + JSON.stringify(result.rows[0]));
 			
@@ -375,9 +374,9 @@ app.get('/Notification', function(req, res) {
 		    // to do: implement idempotency if needed... need to check if there's anything other than startDate and endDate
 		    // that would clue me in as to a notification message being repeated
 			var n = notification;
-			client.query('INSERT INTO "Qualcomm".notifications(sf_contact_id, "trackGuid", "trackName", category, "startDate", "endDate", sf_device_id, sf_org_id, url) ' +
-				'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id', 
-				[n.sf_contact_id, n.trackGuid, n.trackName, n.category, n.startDate, n.endDate, n.sf_device_id, n.sf_org_id, n.url], 
+			client.query('INSERT INTO "Qualcomm".notifications(sf_user_id, "trackGuid", "trackName", category, "startDate", "endDate", sf_org_id, url) ' +
+				'VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id', 
+				[n.sf_user_id, n.trackGuid, n.trackName, n.category, n.startDate, n.endDate, n.sf_org_id, n.url], 
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {
@@ -423,7 +422,7 @@ app.get('/Notification', function(req, res) {
 									encoding: 'UTF-8', 
 									body: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
 										'<' + catBodyTag + '>'+
-										'<guid>'+notification.sf_contact_id+'</guid>'+
+										'<guid>'+notification.sf_user_id+'</guid>'+
 										'<trackGuid>'+notification.trackGuid+'</trackGuid>'+
 										'<filter>'+
 										'<startDate>'+notification.startDate+'</startDate>'+
@@ -432,6 +431,7 @@ app.get('/Notification', function(req, res) {
 
 								}; // end options
 
+								// define callback for Qualcomm's response
 								function callback(error, response, body) {
 									if (error || response.statusCode != 200) {
 										console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
@@ -444,7 +444,7 @@ app.get('/Notification', function(req, res) {
 										var aMeasureResponse = JSON.parse(body);
 										console.log('Response: ' + JSON.stringify(aMeasureResponse));
 
-										insertMeasure(notification.category, notification.sf_contact_id, notification.sf_device_id, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
+										insertMeasure(notification.category, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
 											if (err) {
 											  console.log('Handling /Notification, error inserting new measure response: ' + JSON.stringify(err) + ' Measure response: ' + JSON.stringify(aMeasureResponse));
 											  return;
@@ -457,6 +457,7 @@ app.get('/Notification', function(req, res) {
 									}
 								};
 
+								// retrieve measure from Qualcomm
 								request(options, callback);
 							} // end if (notification.category ...
 						});	// checkOrRefreshAuthentication						
@@ -465,7 +466,7 @@ app.get('/Notification', function(req, res) {
 		}); // client query select
 	}); // pgConnect
 	
-	*/
+	
 });
 
 
