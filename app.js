@@ -227,10 +227,17 @@ app.post('/register', function(req, res) {
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {	
+						if (err.code == "23505")
+						{
+							// record already exists. that's ok
+							console.log('Record already exists. No error. Device: ' + JSON.stringify(dev));	
+						} else {
+						
 						console.log('Error inserting device: ' + JSON.stringify(err));	
-						//res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
-						debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
+						res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
+						//debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
 						return;
+						}
 					} else {
 				
 						console.log('Device inserted: ' + JSON.stringify(dev));													
