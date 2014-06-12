@@ -57,9 +57,9 @@ var sslopts = {
   rejectUnauthorized: false
 };
 // create the server
-var app = module.exports = express.createServer(sslopts);
+var app = module.exports = express.createServer();
 
-console.log("sslopts: " + JSON.stringify(sslopts.key));
+//console.log("sslopts: " + JSON.stringify(sslopts.key));
 
 // Configuration
 app.configure(function(){
