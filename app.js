@@ -33,7 +33,7 @@ var testingClientSecret = process.env.CLIENT_SECRET || '';
 
 var sslopts = {
    
-      // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach
+      // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach with salesforce generated cert
       
   // Specify the key file for the server
   key: fs.readFileSync('ssllocal/server.key'),
