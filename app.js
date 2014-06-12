@@ -36,10 +36,10 @@ var sslopts = {
       // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach with salesforce generated cert
       
   // Specify the key file for the server
-  key: fs.readFileSync('ssllocal/server.key'),
+  key: fs.readFileSync('ssl/server.key'),
    
   // Specify the certificate file
-  cert: fs.readFileSync('ssllocal/server.crt'),
+  cert: fs.readFileSync('ssl/server.crt'),
    
   passphrase: '2netlab',
   
