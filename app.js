@@ -4,7 +4,8 @@ var express = require('express')
   , async = require('async')
   , nforce = require('nforce')
   , pg = require('pg')
-  , request = require('request');
+  , request = require('request')
+  , fs = require('fs');
 
 
 var oauth = []; // array of authentication objects, one per SF org, indexed by org id
@@ -30,8 +31,33 @@ var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var testingClientId = process.env.CLIENT_ID || '';
 var testingClientSecret = process.env.CLIENT_SECRET || '';
 
+var sslopts = {
+   
+      // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach
+      
+  // Specify the key file for the server
+  key: fs.readFileSync('ssllocal/server.key'),
+   
+  // Specify the certificate file
+  cert: fs.readFileSync('ssllocal/server.crt'),
+   
+  passphrase: '2netlab',
+  
+  // Specify the Certificate Authority certificate
+  ca: fs.readFileSync('ssl/ca.crt'),
+   
+  // This is where the magic happens in Node.  All previous
+  // steps simply setup SSL (except the CA).  By requesting
+  // the client provide a certificate, we are essentially
+  // authenticating the user.
+  requestCert: true,
+   
+  // If specified as "true", no unauthenticated traffic
+  // will make it to the route specified.
+  rejectUnauthorized: false
+};
 // create the server
-var app = module.exports = express.createServer();
+var app = module.exports = express.createServer(sslopts);
 
 // Configuration
 app.configure(function(){
@@ -52,7 +78,16 @@ app.configure('production', function(){
 });
 
 // Routes
-app.get('/', routes.index);
+//app.get('/', routes.index);
+
+app.get('/', function(req, res) {
+	if (req.client.authorized) {
+		res.render('index', { title: 'Salesforce - Qualcomm Device Message Handler' })
+	} else {
+		res.render('unauthorized', { title: 'Unauthorized for /' })
+	}
+
+});
 
 
 app.get('/authOrg', function(req, res) {
