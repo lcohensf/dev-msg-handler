@@ -59,7 +59,7 @@ var sslopts = {
 // create the server
 var app = module.exports = express.createServer(sslopts);
 
-console.log("sslopts: " + JSON.stringify(sslopts);
+console.log("sslopts: " + JSON.stringify(sslopts));
 
 // Configuration
 app.configure(function(){
