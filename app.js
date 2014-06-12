@@ -50,7 +50,7 @@ var sslopts = {
   // steps simply setup SSL (except the CA).  By requesting
   // the client provide a certificate, we are essentially
   // authenticating the user.
-  requestCert: true,
+  requestCert: false,
    
   // If specified as "true", no unauthenticated traffic
   // will make it to the route specified.
