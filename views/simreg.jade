@@ -7,4 +7,7 @@ form(method='post', action='/Register')
     label SF Org ID:
       input(name='sf_org_id', value='#{defaults.sf_org_id}', type='text')
   div
+    label JWT:
+      input(name='jwt_token', value='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJvcmdpZCI6IjAwRG8wMDAwMDAwSHJJcSJ9.jwyCP4rWp_ZZH8iRTw8Zk3iCa4tXoAphS_VBluAvbfQ', type='text')
+  div
     input(type='submit', value='Register')

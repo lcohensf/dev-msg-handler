@@ -5,7 +5,7 @@ var express = require('express')
   , nforce = require('nforce')
   , pg = require('pg')
   , request = require('request')
-  , fs = require('fs');
+  , jwt = require('jwt-simple');
 
 
 var oauth = []; // array of authentication objects, one per SF org, indexed by org id
@@ -31,6 +31,11 @@ var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var testingClientId = process.env.CLIENT_ID || '';
 var testingClientSecret = process.env.CLIENT_SECRET || '';
 
+//replace this with env variable
+//jwt
+var jwtSecret = "forregister";
+
+/*
 var sslopts = {
    
       // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach with salesforce generated cert
@@ -56,10 +61,12 @@ var sslopts = {
   // will make it to the route specified.
   rejectUnauthorized: false
 };
+*/
+
 // create the server
 var app = module.exports = express.createServer();
+//var app = module.exports = express.createServer(sslopts);
 
-//console.log("sslopts: " + JSON.stringify(sslopts.key));
 
 // Configuration
 app.configure(function(){
@@ -80,17 +87,7 @@ app.configure('production', function(){
 });
 
 // Routes
-//app.get('/', routes.index);
-
-app.get('/', function(req, res) {
-	if (req.client.authorized) {
-		res.render('index', { title: 'Salesforce - Qualcomm Device Message Handler' })
-	} else {
-		res.render('unauthorized', { title: 'Unauthorized for /' })
-	}
-
-});
-
+app.get('/', routes.index);
 
 app.get('/authOrg', function(req, res) {
 	res.render("authOrg", 
@@ -103,13 +100,16 @@ app.get('/authOrg', function(req, res) {
 		} );
 });
 
-function initSFOrgConnection(orgid, client_key, client_secret) {
+function initSFOrgConnection(orgid, client_key, client_secret, generate_jwt) {
 	oauth[orgid] = {
 		org_id: orgid, // also as field for convenience
 		client_key: client_key,
-		client_secret: client_secret
+		client_secret: client_secret,
+		generate_jwt: generate_jwt || 'off' // will set this to false after generation in current oauth flow
 		// will build up additional fields as we create connection and authenticate
 	};
+	
+	console.log('oauth[orgid].generate_jwt  = ' + oauth[orgid].generate_jwt);
 	
 	// use the nforce package to create a connection to salesforce.com
 
@@ -131,7 +131,7 @@ function initSFOrgConnection(orgid, client_key, client_secret) {
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
 
-	initSFOrgConnection(req.body.org_id, req.body.client_key, req.body.client_secret);
+	initSFOrgConnection(req.body.org_id, req.body.client_key, req.body.client_secret, req.body.generate_jwt);
 	
 	res.redirect(oauth[req.body.org_id].redirectURL);
 });
@@ -150,6 +150,13 @@ app.get(redirRoute, function(req, res) {
 		oauth[orgid].oauthObj = resp;
 		console.log('full oauth: ' + JSON.stringify(oauth[orgid].oauthObj));
 
+		if (oauth[orgid].generate_jwt == 'on') {
+			console.log('generating jwt token for orgid: ' + orgid);
+			oauth[orgid].jwt = jwt.encode({orgid: orgid}, jwtSecret);
+			console.log('jwt = ' + oauth[orgid].jwt );
+			oauth[orgid].generate_jwt = false;
+		}
+		
 		// store authentication info to postgres
 		pg.connect(pgConnectionString, function(err, client, done) {
 			if (err) {
@@ -161,15 +168,20 @@ app.get(redirRoute, function(req, res) {
 					debugMsg(res, "error", {title: 'Unable to clear any existing oauth records in postgres db for org: ' + orgid, data: err});
 					return;
 				}
-				client.query('INSERT INTO "Qualcomm".oauth (org_id, client_id, client_secret, refresh_token, redirect_path, active) VALUES ($1, $2, $3, $4, $5, true)',
-					[orgid, oauth[orgid].client_key, oauth[orgid].client_secret, oauth[orgid].oauthObj.refresh_token, oauth[orgid].redirectURL], 
+				client.query('INSERT INTO "Qualcomm".oauth (org_id, client_id, client_secret, refresh_token, redirect_path, jwt_token, active) VALUES ($1, $2, $3, $4, $5, $6, true)',
+					[orgid, oauth[orgid].client_key, oauth[orgid].client_secret, oauth[orgid].oauthObj.refresh_token, oauth[orgid].redirectURL, oauth[orgid].jwt], 
 					function(err, result) {
 						done(); // release client back to the pool
 						if (err) {
 							debugMsg(res, "error", {title: 'Unable to insert to postgres db.', data: err});
 							return;
 						}
-						res.render("authenticated", { title: 'Salesforce Authentication' } );
+						res.render("authenticated", 
+						{ title: 'Salesforce Authentication',
+							defaults: {
+								jwt_token: oauth[orgid].jwt
+							}
+						} );
 				});
 			});	
 
@@ -232,21 +244,37 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 }
 
 app.get('/simreg', function(req, res) {
-	res.render("simreg", 
-		{ title: 'Enter Device info', 
-		  defaults: {
-		  	sf_user_id: '',
-		  	sf_org_id: '',
-		  }
-		} );
+	//if (req.client.authorized) {
+		res.render("simreg", 
+			{ title: 'Enter Device info', 
+			  defaults: {
+				sf_user_id: '',
+				sf_org_id: testingOrgId,
+			  }
+			} );
+	//} else {
+	//	res.render('unauthorized', { title: 'Unauthorized for /' });
+	//}
 });
 
-app.post('/register', function(req, res) {
 
+app.post('/register', function(req, res) {
+	
 	var dev = {
 		sf_user_id: req.body.sf_user_id || '',		
 		sf_org_id: req.body.sf_org_id || ''
 	};
+	
+	// check if user has valid JWT token
+	/*
+	var decoded = jwt.decode(req.body.jwt_token || '', jwtSecret);
+	console.log('decoded = ' + decoded.orgid + '  sf_org_id = ' + dev.sf_org_id);
+	if (decoded.orgid != dev.sf_org_id) {
+		res.render('unauthorized', { title: 'Unauthorized for registration of devices. Invalid JWT token.' });
+		return;
+		// this will eventually need to change to return error status
+	}
+	*/
 
   pg.connect(pgConnectionString, function(err, client, done) {
 		if (err) {

@@ -9,5 +9,8 @@ form(method='post', action='/authenticate')
   div
     label Client Secret:
       input(name='client_secret', value='#{defaults.clientSecret}', type='text')
+  div 
+    label Generate New JWT Token for Salesforce Callouts?
+      input(name='generate_jwt', type='checkbox', checked=false)
   div
     input(type='submit', value='Authenticate')
