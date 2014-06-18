@@ -5,6 +5,7 @@ var express = require('express')
   , nforce = require('nforce')
   , pg = require('pg')
   , request = require('request')
+  , fs = require("fs")
   , jwt = require('jwt-simple');
 
 
@@ -30,6 +31,7 @@ var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var testingClientId = process.env.CLIENT_ID || '';
 var testingClientSecret = process.env.CLIENT_SECRET || '';
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //didn't work - a suggestion to get around the Error: DEPTH_ZERO_SELF_SIGNED_CERT
 
 //replace this with env variable
 //jwt
@@ -41,27 +43,28 @@ var sslopts = {
       // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach with salesforce generated cert
       
   // Specify the key file for the server
-  key: fs.readFileSync('ssl/server.key'),
+  key: fs.readFileSync('ssllocal/server.key'),
    
   // Specify the certificate file
-  cert: fs.readFileSync('ssl/server.crt'),
+  cert: fs.readFileSync('ssllocal/server.crt'),
    
   passphrase: '2netlab',
   
   // Specify the Certificate Authority certificate
-  ca: fs.readFileSync('ssl/ca.crt'),
+  ca: fs.readFileSync('ssllocal/ca.crt'),
    
   // This is where the magic happens in Node.  All previous
   // steps simply setup SSL (except the CA).  By requesting
   // the client provide a certificate, we are essentially
   // authenticating the user.
-  requestCert: false,
+  requestCert: true,
    
   // If specified as "true", no unauthenticated traffic
   // will make it to the route specified.
   rejectUnauthorized: false
 };
 */
+
 
 // create the server
 var app = module.exports = express.createServer();
@@ -105,7 +108,7 @@ function initSFOrgConnection(orgid, client_key, client_secret, generate_jwt) {
 		org_id: orgid, // also as field for convenience
 		client_key: client_key,
 		client_secret: client_secret,
-		generate_jwt: generate_jwt || 'off' // will set this to false after generation in current oauth flow
+		generate_jwt: generate_jwt || 'off' // if set to 'on', will set this to off after generation in current oauth flow
 		// will build up additional fields as we create connection and authenticate
 	};
 	
@@ -154,7 +157,7 @@ app.get(redirRoute, function(req, res) {
 			console.log('generating jwt token for orgid: ' + orgid);
 			oauth[orgid].jwt = jwt.encode({orgid: orgid}, jwtSecret);
 			console.log('jwt = ' + oauth[orgid].jwt );
-			oauth[orgid].generate_jwt = false;
+			oauth[orgid].generate_jwt = 'off';
 		}
 		
 		// store authentication info to postgres
