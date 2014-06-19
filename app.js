@@ -313,14 +313,29 @@ if (runlocal == true) {
 // display the test encode data
 app.get('/testencdisplay', function(req, res) {
 
+/*
+SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt
+FROM "Qualcomm".testenc where testenc.id = $1
+CROSS JOIN (SELECT dearmor($2) as privkey) as keys
+*/	
+
+var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc where testenc.id = $1 CROSS JOIN (SELECT dearmor($2) as privkey) as keys';
+var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
+var selectstmt = pgcryptoselect;
+var selectarray = [req.query.id, privkey];
+
+if (runlocal == true) {
+	selectstmt = noncryptoselect;
+	selectarray = [req.query.id];
+}
+
   pg.connect(pgConnectionString, function(err, client, done) {
 	if (err) {
 		console.log('Handling /testencdisplay, unable to connect to postgres db. ' + JSON.stringify(err));
 		res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
 		return;
 	}
-	client.query('SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1',
-		[req.query.id], 
+	client.query(selectstmt, selectarray,
 		function(err, result) {
 			done(); // release client back to the pool
 			if (err) {
@@ -328,15 +343,19 @@ app.get('/testencdisplay', function(req, res) {
 				return;
 			}
 			if (result.rows.length < 1) {
-				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.params.id);
+				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.query.id);
 				return;
 			}
 			
 			var testdata = {
-				id:result.rows[0].id || 'error',
-				enc: result.rows[0].enc || 'error',		
+				id:result.rows[0].id || 'error',	
 				notenc: result.rows[0].notenc || 'error'
 			};
+			if (runlocal == true) {
+				enc: result.rows[0].enc || 'error';	
+			} else {
+				enc: result.rows[0].encdecrypt || 'error';	
+			}
 			console.log('result: ' + JSON.stringify(result.rows[0]));
 			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
 			res.end();
