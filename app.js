@@ -315,11 +315,12 @@ app.get('/testencdisplay', function(req, res) {
 
 /*
 SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt
-FROM "Qualcomm".testenc where testenc.id = $1
+FROM "Qualcomm".testenc 
 CROSS JOIN (SELECT dearmor($2) as privkey) as keys
+where testenc.id = $1
 */	
 
-var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc where testenc.id = $1 CROSS JOIN (SELECT dearmor($2) as privkey) as keys';
+var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
 var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
 var selectstmt = pgcryptoselect;
 var selectarray = [req.query.id, privkey];
