@@ -31,8 +31,8 @@ var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var testingClientId = process.env.CLIENT_ID || '';
 var testingClientSecret = process.env.CLIENT_SECRET || '';
-var pubkey = fs.readFileSync('devpublic.key').toString();
-var privkey = fs.readFileSync('devprivate.key').toString();
+var pubkey = fs.readFileSync('public.key').toString();
+var privkey = fs.readFileSync('private.key').toString();
 var runlocal = redir.search('localhost') != -1;
 console.log('runlocal: ' + runlocal);
 //console.log('pubkey: ' + pubkey);
@@ -352,9 +352,9 @@ if (runlocal == true) {
 				notenc: result.rows[0].notenc || 'error'
 			};
 			if (runlocal == true) {
-				enc: result.rows[0].enc || 'error';	
+				testdata.enc = result.rows[0].enc || 'error';	
 			} else {
-				enc: result.rows[0].encdecrypt || 'error';	
+				testdata.enc =  result.rows[0].encdecrypt || 'error';	
 			}
 			console.log('result: ' + JSON.stringify(result.rows[0]));
 			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
