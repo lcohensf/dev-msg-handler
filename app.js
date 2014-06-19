@@ -246,6 +246,85 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 
 }
 
+app.get('/testenc', function(req, res) {
+		res.render("testenc", 
+			{ title: 'Enter data'
+
+			} );
+});
+
+app.post('/testencinsert', function(req, res) {
+	
+	var testdata = {
+		id: '',
+		enc: req.body.enc || '',		
+		notenc: req.body.notenc || ''
+	};
+	
+	
+	  pg.connect(pgConnectionString, function(err, client, done) {
+		if (err) {
+			
+			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
+			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
+			return;
+		}
+		client.query('INSERT INTO "Qualcomm".testenc("enc", "notenc") ' +
+				'VALUES ($1, $2) RETURNING id', 
+				[testdata.enc, testdata.notenc], 
+				function(err, result) {
+					done(); // release client back to the pool
+					if (err) {
+						console.log('Handling /testencinsert, unable to insert record to postgres db. ' + JSON.stringify(err));
+						res.send(500, {status:500, message: 'Unable to insert record to postgres db.', type:'internal'});
+						return;
+					} else {
+						testdata.id = result.rows[0].id;	
+						console.log('new testdata id: ' + testdata.id);
+						res.redirect('/testencdisplay?id='+testdata.id);
+						res.end();
+					}
+				});
+
+	});		
+
+});
+
+// display the test encode data
+app.get('/testencdisplay', function(req, res) {
+
+  pg.connect(pgConnectionString, function(err, client, done) {
+	if (err) {
+		console.log('Handling /testencdisplay, unable to connect to postgres db. ' + JSON.stringify(err));
+		res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
+		return;
+	}
+	client.query('SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1',
+		[req.query.id], 
+		function(err, result) {
+			done(); // release client back to the pool
+			if (err) {
+				console.log('Handling /testencdisplay, unable to retrieve testdata from postgres db.' + JSON.stringify(err));
+				return;
+			}
+			if (result.rows.length < 1) {
+				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.params.id);
+				return;
+			}
+			
+			var testdata = {
+				id:result.rows[0].id || 'error',
+				enc: result.rows[0].enc || 'error',		
+				notenc: result.rows[0].notenc || 'error'
+			};
+			console.log('result: ' + JSON.stringify(result.rows[0]));
+			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
+			res.end();
+		});
+	});
+
+});
+
 app.get('/simreg', function(req, res) {
 	//if (req.client.authorized) {
 		res.render("simreg", 
