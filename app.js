@@ -31,6 +31,13 @@ var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var testingClientId = process.env.CLIENT_ID || '';
 var testingClientSecret = process.env.CLIENT_SECRET || '';
+var pubkey = fs.readFileSync('devpublic.key').toString();
+var privkey = fs.readFileSync('devprivate.key').toString();
+var runlocal = redir.search('localhost') != -1;
+console.log('runlocal: ' + runlocal);
+//console.log('pubkey: ' + pubkey);
+//console.log('privkey: ' + privkey);
+
 //process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //didn't work - a suggestion to get around the Error: DEPTH_ZERO_SELF_SIGNED_CERT
 
 //replace this with env variable
@@ -260,8 +267,23 @@ app.post('/testencinsert', function(req, res) {
 		enc: req.body.enc || '',		
 		notenc: req.body.notenc || ''
 	};
-	
-	
+
+/*
+INSERT INTO "Qualcomm".testend("enc", "notenc")
+SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc
+FROM (VALUES ($1, $2)) as vals(notenc, enc)
+CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
+*/	
+
+var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
+var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
+var insertstmt = pgcryptoinsert;
+var insertarray = [testdata.notenc, testdata.enc, pubkey];
+
+if (runlocal == true) {
+	insertstmt = noncryptoinsert;
+	insertarray = [testdata.notenc, testdata.enc];
+}
 	  pg.connect(pgConnectionString, function(err, client, done) {
 		if (err) {
 			
@@ -269,9 +291,7 @@ app.post('/testencinsert', function(req, res) {
 			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
 			return;
 		}
-		client.query('INSERT INTO "Qualcomm".testenc("enc", "notenc") ' +
-				'VALUES ($1, $2) RETURNING id', 
-				[testdata.enc, testdata.notenc], 
+		client.query(insertstmt, insertarray, 
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {
