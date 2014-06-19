@@ -528,6 +528,7 @@ app.get('/Notification', function(req, res) {
 	var qcEndpoint = 'https://twonetcom.qualcomm.com/kernel/';
 	var qcKey = 'vh16CKn29ubka83Lad27';
 	var qcSecret = 'WXx2tlAFkwDF2CPHekRfyXD78BeA3FAP';
+	var insertMeasureFlag = true;
 
 	var notification = {
 		id: '',
@@ -547,6 +548,7 @@ app.get('/Notification', function(req, res) {
   pg.connect(pgConnectionString, function(err, client, done) {
 	if (err) {
 		console.log('Handling /Notification, unable to connect to postgres db. ' + JSON.stringify(err));
+		res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 		return;
 	}
 	client.query('SELECT devices.sf_org_id FROM "Qualcomm".devices WHERE devices.sf_user_id = $1',
@@ -554,13 +556,16 @@ app.get('/Notification', function(req, res) {
 		function(err, result) {
 			if (err) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
+				res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 				return;
 			}
 			if (result.rows.length < 1) {
 				console.log('Handling /Notification, the user for this device notification is not registered: ' + notification.sf_user_id);
-				return;
+				insertMeasureFlag = false;
+				notification.sf_org_id =  'unknown user, org unknown';
+			} else {
+				notification.sf_org_id = result.rows[0].sf_org_id;
 			}
-			notification.sf_org_id = result.rows[0].sf_org_id;
 			console.log('result: ' + JSON.stringify(result.rows[0]));
 			
 							
@@ -575,86 +580,96 @@ app.get('/Notification', function(req, res) {
 					done(); // release client back to the pool
 					if (err) {
 						console.log('Handling /Notification, unable to insert notification to postgres db. ' + JSON.stringify(err));
+						res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 						return;
 					} else {
 						notification.id = result.rows[0].id;	
 						console.log('new notification id: ' + notification.id);	
-																				
-						// check that we are authenticated with this SF org, and if not authenticate with stored token
-						checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) {
-							if (err) {
-								console.log('Handling /Notification, no connection to SF org. Notification processing halted. '+ JSON.stringify(err));
-								return;
-							}				
+						
+						if (insertMeasureFlag == false) {
+							res.send(200, {status:200, message: 'Logged notification for unknown user.'});
+							return;
+						} else {														
+							// check that we are authenticated with this SF org, and if not authenticate with stored token
+							checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) {
+								if (err) {
+									console.log('Handling /Notification, no connection to SF org. Notification processing halted. '+ JSON.stringify(err));
+									res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+									return;
+								}				
 		
 
-							if (notification.category == 'blood' || notification.category == 'activity' || notification.category == 'body')
-							{
-								var catEndPoint = '';
-								var catBodyTag = '';
-								if (notification.category == 'blood') {
-									catEndPoint = 'partner/measure/blood/filtered';
-									catBodyTag = 'measureRequest';
-								}
-								else if (notification.category == 'activity') {
-									catEndPoint = 'partner/activity/filtered';
-									catBodyTag = 'activityRequest';
-								}
-								else if (notification.category == 'body') {
-									catEndPoint = 'partner/measure/body/filtered';
-									catBodyTag = 'measureRequest';
-								}
+								if (notification.category == 'blood' || notification.category == 'activity' || notification.category == 'body')
+								{
+									var catEndPoint = '';
+									var catBodyTag = '';
+									if (notification.category == 'blood') {
+										catEndPoint = 'partner/measure/blood/filtered';
+										catBodyTag = 'measureRequest';
+									}
+									else if (notification.category == 'activity') {
+										catEndPoint = 'partner/activity/filtered';
+										catBodyTag = 'activityRequest';
+									}
+									else if (notification.category == 'body') {
+										catEndPoint = 'partner/measure/body/filtered';
+										catBodyTag = 'measureRequest';
+									}
 				
-								var options = {
-									url: qcEndpoint + catEndPoint,
-									method: 'POST',
-									headers: {
-										'Authorization': 'Basic '+ new Buffer(qcKey + ':' + qcSecret).toString('base64'),
-										'Content-Type': 'application/xml',
-										'Accept': 'application/json'
-									},
-									encoding: 'UTF-8', 
-									body: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
-										'<' + catBodyTag + '>'+
-										'<guid>'+notification.sf_user_id+'</guid>'+
-										'<trackGuid>'+notification.trackGuid+'</trackGuid>'+
-										'<filter>'+
-										'<startDate>'+notification.startDate+'</startDate>'+
-										'<endDate>'+notification.endDate+'</endDate>'+
-										'</filter></' + catBodyTag + '>'
+									var options = {
+										url: qcEndpoint + catEndPoint,
+										method: 'POST',
+										headers: {
+											'Authorization': 'Basic '+ new Buffer(qcKey + ':' + qcSecret).toString('base64'),
+											'Content-Type': 'application/xml',
+											'Accept': 'application/json'
+										},
+										encoding: 'UTF-8', 
+										body: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+											'<' + catBodyTag + '>'+
+											'<guid>'+notification.sf_user_id+'</guid>'+
+											'<trackGuid>'+notification.trackGuid+'</trackGuid>'+
+											'<filter>'+
+											'<startDate>'+notification.startDate+'</startDate>'+
+											'<endDate>'+notification.endDate+'</endDate>'+
+											'</filter></' + catBodyTag + '>'
 
-								}; // end options
+									}; // end options
 
-								// define callback for Qualcomm's response
-								function callback(error, response, body) {
-									if (error || response.statusCode != 200) {
-										console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
-										return;
-									}
-									else {
-										console.log('STATUS: ' + response.statusCode);
-										console.log('HEADERS: ' + JSON.stringify(response.headers));
+									// define callback for Qualcomm's response
+									function callback(error, response, body) {
+										if (error || response.statusCode != 200) {
+											console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
+											res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+											return;
+										}
+										else {
+											console.log('STATUS: ' + response.statusCode);
+											console.log('HEADERS: ' + JSON.stringify(response.headers));
 
-										var aMeasureResponse = JSON.parse(body);
-										console.log('Response: ' + JSON.stringify(aMeasureResponse));
+											var aMeasureResponse = JSON.parse(body);
+											console.log('Response: ' + JSON.stringify(aMeasureResponse));
 
-										insertMeasure(notification.category, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
-											if (err) {
-											  console.log('Handling /Notification, error inserting new measure response: ' + JSON.stringify(err) + ' Measure response: ' + JSON.stringify(aMeasureResponse));
-											  return;
-											} else {
-												res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
-												res.end();
+											insertMeasure(notification.category, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
+												if (err) {
+												  console.log('Handling /Notification, error inserting new measure response: ' + JSON.stringify(err) + ' Measure response: ' + JSON.stringify(aMeasureResponse));
+												  res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+												  return;
+												} else {
+													res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
+													res.end();
 							  
-											}
-										});
-									}
-								};
+												}
+											});
+										}
+									};
 
-								// retrieve measure from Qualcomm
-								request(options, callback);
-							} // end if (notification.category ...
-						});	// checkOrRefreshAuthentication						
+									// retrieve measure from Qualcomm
+									request(options, callback);
+								} // end if (notification.category ...
+							});	// checkOrRefreshAuthentication	
+						} // if insertMeasureFlag
+											
 					} //  else 
 			});	// client query insert	
 		}); // client query select
