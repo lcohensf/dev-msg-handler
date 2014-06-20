@@ -21,62 +21,34 @@ function debugMsg(res, viewType, opts) {
 		console.log(viewType + ':  ' + JSON.stringify(opts));
 	}
 }
-var pgConnectionString = process.env.DATABASE_URL || 'postgres://postgres:misspiggy@localhost:5432/postgres';
 
+var pgConnectionString = process.env.DATABASE_URL || '';
 var port = process.env.PORT || 3001; 
 var redirRoute = '/oauth/_callback';
 var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
-//  org id, client secret and client key are different for each org; however, defaults may be in env
-//  variables for one org used frequently for testing
+//  testingOrgId only for simplifying testing to prepopulate form field
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
-var testingClientId = process.env.CLIENT_ID || '';
-var testingClientSecret = process.env.CLIENT_SECRET || '';
+var connectedAppClientId = process.env.CLIENT_ID || '';
+var connectedAppClientSecret = process.env.CLIENT_SECRET || '';
 var pubkey = fs.readFileSync('public.key').toString();
 var privkey = fs.readFileSync('private.key').toString();
 var runlocal = redir.search('localhost') != -1;
-console.log('runlocal: ' + runlocal);
-//console.log('pubkey: ' + pubkey);
-//console.log('privkey: ' + privkey);
-
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; //didn't work - a suggestion to get around the Error: DEPTH_ZERO_SELF_SIGNED_CERT
-
-//replace this with env variable
-//jwt
-var jwtSecret = "forregister";
+var qcEndpoint = process.env.QCEndpoint || '';
+var qcKey = process.env.QCKey || '';
+var qcSecret = process.env.QCSecret || '';
+var jwtSecret = process.env.JWTSecret || '';
 
 /*
-var sslopts = {
-   
-      // pfx: fs.readFileSync('Qualcomm.crt') -- got an error trying this approach with salesforce generated cert
-      
-  // Specify the key file for the server
-  key: fs.readFileSync('ssllocal/server.key'),
-   
-  // Specify the certificate file
-  cert: fs.readFileSync('ssllocal/server.crt'),
-   
-  passphrase: '2netlab',
-  
-  // Specify the Certificate Authority certificate
-  ca: fs.readFileSync('ssllocal/ca.crt'),
-   
-  // This is where the magic happens in Node.  All previous
-  // steps simply setup SSL (except the CA).  By requesting
-  // the client provide a certificate, we are essentially
-  // authenticating the user.
-  requestCert: true,
-   
-  // If specified as "true", no unauthenticated traffic
-  // will make it to the route specified.
-  rejectUnauthorized: false
-};
+	Fields in oauth objects array
+	
+	oauth[orgid] = {
+		connection: '', //  returned by nforce.createConnection()
+		redirectURL: '', // built up as part of creating connection to Salesforce
+		oauthObj: '', // response from authentication flow, only care about refresh_token field	
+	};
 */
-
-
 // create the server
 var app = module.exports = express.createServer();
-//var app = module.exports = express.createServer(sslopts);
-
 
 // Configuration
 app.configure(function(){
@@ -104,29 +76,22 @@ app.get('/authOrg', function(req, res) {
 		{ title: 'Enter Salesforce Authentication Information', 
 		  defaults: {
 		  	orgId: testingOrgId,
-		  	clientId: testingClientId,
-		  	clientSecret: testingClientSecret
 		  }
 		} );
 });
 
-function initSFOrgConnection(orgid, client_key, client_secret, generate_jwt) {
+function initSFOrgConnection(orgid) {
 	oauth[orgid] = {
-		org_id: orgid, // also as field for convenience
-		client_key: client_key,
-		client_secret: client_secret,
-		generate_jwt: generate_jwt || 'off' // if set to 'on', will set this to off after generation in current oauth flow
-		// will build up additional fields as we create connection and authenticate
+		// will build up  fields as we create connection and authenticate
 	};
 	
-	console.log('oauth[orgid].generate_jwt  = ' + oauth[orgid].generate_jwt);
 	
 	// use the nforce package to create a connection to salesforce.com
 
 	oauth[orgid].connection = nforce.createConnection({
-	  clientId: oauth[orgid].client_key,
-	  clientSecret: oauth[orgid].client_secret,
-	  clientOrgId: oauth[orgid].org_id,
+	  clientId: connectedAppClientId,
+	  clientSecret: connectedAppClientSecret,
+	  clientOrgId: orgid,
 	  redirectUri: redir,
 	  mode: 'multi', // todo: support authentication to multiple orgs
 	  apiVersion: 'v29.0',  // optional, defaults to v24.0
@@ -134,14 +99,14 @@ function initSFOrgConnection(orgid, client_key, client_secret, generate_jwt) {
 	});
 	console.log('after createConnection');
 	
-	oauth[orgid].redirectURL  = oauth[orgid].connection.getAuthUri({state: oauth[orgid].org_id, display: 'popup', scope: ['full', 'refresh_token']});
+	oauth[orgid].redirectURL  = oauth[orgid].connection.getAuthUri({state: orgid, display: 'popup', scope: ['full', 'refresh_token']});
 	console.log('redirectURL = ' + oauth[orgid].redirectURL);
 }
 
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
 
-	initSFOrgConnection(req.body.org_id, req.body.client_key, req.body.client_secret, req.body.generate_jwt);
+	initSFOrgConnection(req.body.org_id);
 	
 	res.redirect(oauth[req.body.org_id].redirectURL);
 });
@@ -159,13 +124,6 @@ app.get(redirRoute, function(req, res) {
 		console.log('Access Token: ' + resp.access_token);
 		oauth[orgid].oauthObj = resp;
 		console.log('full oauth: ' + JSON.stringify(oauth[orgid].oauthObj));
-
-		if (oauth[orgid].generate_jwt == 'on') {
-			console.log('generating jwt token for orgid: ' + orgid);
-			oauth[orgid].jwt = jwt.encode({orgid: orgid}, jwtSecret);
-			console.log('jwt = ' + oauth[orgid].jwt );
-			oauth[orgid].generate_jwt = 'off';
-		}
 		
 		// store authentication info to postgres
 		pg.connect(pgConnectionString, function(err, client, done) {
@@ -173,29 +131,42 @@ app.get(redirRoute, function(req, res) {
 				debugMsg(res, "error", {title: 'Unable to connect to postgres db.', data: err});
 				return;
 			}
-			client.query('UPDATE "Qualcomm".oauth SET  active=false WHERE org_id=$1', [orgid], function(err) { // don't care about result param for update
+			// delete old record for org and then insert 
+			client.query('DELETE FROM "Qualcomm".oauth WHERE org_id=$1', [orgid], function(err) { 
 				if (err) {
 					debugMsg(res, "error", {title: 'Unable to clear any existing oauth records in postgres db for org: ' + orgid, data: err});
 					return;
 				}
-				client.query('INSERT INTO "Qualcomm".oauth (org_id, client_id, client_secret, refresh_token, redirect_path, jwt_token, active) VALUES ($1, $2, $3, $4, $5, $6, true)',
-					[orgid, oauth[orgid].client_key, oauth[orgid].client_secret, oauth[orgid].oauthObj.refresh_token, oauth[orgid].redirectURL, oauth[orgid].jwt], 
+				client.query('INSERT INTO "Qualcomm".oauth (org_id, refresh_token) VALUES ($1, $2)',
+					[orgid, oauth[orgid].oauthObj.refresh_token], 
 					function(err, result) {
 						done(); // release client back to the pool
 						if (err) {
 							debugMsg(res, "error", {title: 'Unable to insert to postgres db.', data: err});
 							return;
 						}
-						res.render("authenticated", 
-						{ title: 'Salesforce Authentication',
-							defaults: {
-								jwt_token: oauth[orgid].jwt
+						//upsert jwtToken to SF org
+						upsertJWTToken(jwt.encode({orgid: orgid}, jwtSecret), orgid, oauth[orgid], function(err, refreshedOauthElement) {
+							if (err) {
+							  console.log('Error inserting JWT token to SF org: ' + JSON.stringify(err));
+							  res.send(501, {status:501, message: 'Internal error.', type:'internal'});
+							  res.end();
+							  return;
+							} else {
+								res.render("authenticated", 
+									{ title: 'Salesforce Authentication'
+
+									} );
 							}
-						} );
+						});
+
 				});
 			});	
 
 		});
+		
+
+		
 	  } else {
 		debugMsg(res, "error", {title: 'Unable to authenticate.', data: err});
 		return;
@@ -207,7 +178,8 @@ app.get(redirRoute, function(req, res) {
 
 //e.g. checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) { ... });
 function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
-
+	console.log('checkOrRefreshAuthentication, refresh = ' + refresh + ' orgId = ' + tOrgId);
+	
 	var self = this;
 	if (refresh == 'false' && (typeof oauth[tOrgId] !== 'undefined') && (typeof oauth[tOrgId].oauthObj !== 'undefined')) {
 		// appears we have authenticated this org; possible the access token is expired but we'll catch that on a DML execution
@@ -221,7 +193,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 				console.log('Attempting to check or refresh authentication. Unable to connect to postgres db. ' + JSON.stringify(err));
 				return;
 			}
-			client.query('SELECT oauth.org_id, oauth.client_id, oauth.client_secret, oauth.refresh_token FROM "Qualcomm".oauth where org_id = $1 and oauth.active = true',	
+			client.query('SELECT oauth.org_id, oauth.refresh_token FROM "Qualcomm".oauth where org_id = $1',	
 				[tOrgId], 
 				function(err, result) {
 					done(); // release client back to the pool
@@ -233,8 +205,8 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 					}		
 
 					console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
-					oauth[tOrgId] = {};
-					initSFOrgConnection(result.rows[0].org_id, result.rows[0].client_id, result.rows[0].client_secret);
+
+					initSFOrgConnection(result.rows[0].org_id, connectedAppClientId, connectedAppClientSecret);
 					oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token};
 					
 					oauth[tOrgId].connection.refreshToken({oauth: oauth[tOrgId].oauthObj}, function(err, resp) {
@@ -268,23 +240,23 @@ app.post('/testencinsert', function(req, res) {
 		notenc: req.body.notenc || ''
 	};
 
-/*
-INSERT INTO "Qualcomm".testend("enc", "notenc")
-SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc
-FROM (VALUES ($1, $2)) as vals(notenc, enc)
-CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
-*/	
+	/*
+	INSERT INTO "Qualcomm".testend("enc", "notenc")
+	SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc
+	FROM (VALUES ($1, $2)) as vals(notenc, enc)
+	CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
+	*/	
 
-var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
-var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
-var insertstmt = pgcryptoinsert;
-var insertarray = [testdata.notenc, testdata.enc, pubkey];
+	var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
+	var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
+	var insertstmt = pgcryptoinsert;
+	var insertarray = [testdata.notenc, testdata.enc, pubkey];
 
-if (runlocal == true) {
-	insertstmt = noncryptoinsert;
-	insertarray = [testdata.notenc, testdata.enc];
-}
-	  pg.connect(pgConnectionString, function(err, client, done) {
+	if (runlocal == true) {
+		insertstmt = noncryptoinsert;
+		insertarray = [testdata.notenc, testdata.enc];
+	}
+	pg.connect(pgConnectionString, function(err, client, done) {
 		if (err) {
 			
 			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
@@ -296,7 +268,7 @@ if (runlocal == true) {
 					done(); // release client back to the pool
 					if (err) {
 						console.log('Handling /testencinsert, unable to insert record to postgres db. ' + JSON.stringify(err));
-						res.send(500, {status:500, message: 'Unable to insert record to postgres db.', type:'internal'});
+						res.send(502, {status:502, message: 'Unable to insert record to postgres db.', type:'internal'});
 						return;
 					} else {
 						testdata.id = result.rows[0].id;	
@@ -304,7 +276,7 @@ if (runlocal == true) {
 						res.redirect('/testencdisplay?id='+testdata.id);
 						res.end();
 					}
-				});
+		});
 
 	});		
 
@@ -313,22 +285,22 @@ if (runlocal == true) {
 // display the test encode data
 app.get('/testencdisplay', function(req, res) {
 
-/*
-SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt
-FROM "Qualcomm".testenc 
-CROSS JOIN (SELECT dearmor($2) as privkey) as keys
-where testenc.id = $1
-*/	
+	/*
+	SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt
+	FROM "Qualcomm".testenc 
+	CROSS JOIN (SELECT dearmor($2) as privkey) as keys
+	where testenc.id = $1
+	*/	
 
-var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
-var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
-var selectstmt = pgcryptoselect;
-var selectarray = [req.query.id, privkey];
+	var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
+	var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
+	var selectstmt = pgcryptoselect;
+	var selectarray = [req.query.id, privkey];
 
-if (runlocal == true) {
-	selectstmt = noncryptoselect;
-	selectarray = [req.query.id];
-}
+	if (runlocal == true) {
+		selectstmt = noncryptoselect;
+		selectarray = [req.query.id];
+	}
 
   pg.connect(pgConnectionString, function(err, client, done) {
 	if (err) {
@@ -361,22 +333,23 @@ if (runlocal == true) {
 			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
 			res.end();
 		});
-	});
+   });
 
 });
 
 app.get('/simreg', function(req, res) {
-	//if (req.client.authorized) {
-		res.render("simreg", 
-			{ title: 'Enter Device info', 
-			  defaults: {
-				sf_user_id: '',
-				sf_org_id: testingOrgId,
-			  }
-			} );
-	//} else {
-	//	res.render('unauthorized', { title: 'Unauthorized for /' });
-	//}
+	// limit to https
+	
+
+	res.render("simreg", 
+		{ title: 'Enter Device info', 
+		  defaults: {
+			sf_user_id: '',
+			sf_org_id: testingOrgId,
+			jwt_token: jwt.encode({orgid: testingOrgId}, jwtSecret)
+		  }
+		} );
+
 });
 
 
@@ -384,19 +357,19 @@ app.post('/register', function(req, res) {
 	
 	var dev = {
 		sf_user_id: req.body.sf_user_id || '',		
-		sf_org_id: req.body.sf_org_id || ''
+		sf_org_id: req.body.sf_org_id || '', 
+		jwt_token: req.body.jwt_token || ''
 	};
 	
-	// check if user has valid JWT token
-	/*
-	var decoded = jwt.decode(req.body.jwt_token || '', jwtSecret);
+
+	var decoded = jwt.decode(dev.jwt_token, jwtSecret);
 	console.log('decoded = ' + decoded.orgid + '  sf_org_id = ' + dev.sf_org_id);
 	if (decoded.orgid != dev.sf_org_id) {
-		res.render('unauthorized', { title: 'Unauthorized for registration of devices. Invalid JWT token.' });
+		//res.render('unauthorized', { title: 'Unauthorized for registration of devices. Invalid JWT token.' });
+		res.send(503, {status:503, message: 'Unauthorized for registration of devices. Invalid JWT token.', type:'internal'});
 		return;
-		// this will eventually need to change to return error status
 	}
-	*/
+
 
   pg.connect(pgConnectionString, function(err, client, done) {
 		if (err) {
@@ -421,7 +394,7 @@ app.post('/register', function(req, res) {
 						} else {
 						
 						console.log('Error inserting device: ' + JSON.stringify(err));	
-						res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
+						res.send(504, {status:504, message: 'Unable to insert device to postgres db.', type:'internal'});
 						//debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
 						return;
 						}
@@ -437,11 +410,37 @@ app.post('/register', function(req, res) {
   res.send(200, {status:200, message: 'Device registration successful', dev: JSON.stringify(dev)});
 });
 
+// upsertJWTToken may refresh oauthElement
+// upsertJWTToken(token, oauthElement, function(err, refreshedOauthElement) ...
+function upsertJWTToken(tokenStr, orgid, oauthElement, callback) {
+	var tokenRecord = {
+		token__c: tokenStr
+	};						
 
+	var obj = nforce.createSObject('JWTToken__c', tokenRecord);
+	obj.setExternalId('orgid__c', orgid);
+	console.log('object to upsert: ' + JSON.stringify(obj));
+	checkOrRefreshAuthentication(false, orgid, function(err, refreshedOauthElement) {
+		if (err) {
+			return callback('Error retrieving authentication object: ' + err, null);
+
+		} else {
+			oauthElement = refreshedOauthElement;
+			oauthElement.connection.upsert({sobject: obj, oauth: oauthElement.oauthObj}, function(err, resp){
+				if (err) {
+					console.log('Error inserting JWTToken. err: ' + JSON.stringify(err));
+					return callback('Error inserting JWTToken: ' + err, oauthElement);
+				} else {return callback(null, oauthElement);} 
+			});
+		}
+		
+	}); 
+
+}
 
 // insertMeasure may refresh oauthElement
 // insertMeasure(category, ..., oauthElement, function(err, measureId, refreshedOauthElement) ...
-function insertMeasure(category, sf_user_id, trackGuid, notificationId, aMeasureResponse, oauthElement, callback) {
+function insertMeasure(category, orgid, sf_user_id, trackGuid, notificationId, aMeasureResponse, oauthElement, callback) {
 	var aMeasure;						
 	
 	if (category == 'blood') {
@@ -503,7 +502,7 @@ function insertMeasure(category, sf_user_id, trackGuid, notificationId, aMeasure
 		// to do: check the err and only retry if it's an expired token
 		
 		console.log('Error inserting measure. Try to refresh token and retry once.');
-		checkOrRefreshAuthentication(true, oauthElement.org_id, function(err, refreshedOauthElement) {
+		checkOrRefreshAuthentication(true, orgid, function(err, refreshedOauthElement) {
 			if (err) {
 				return callback('Error refreshing expired token: ' + err, null, null);
 		
@@ -525,9 +524,7 @@ function insertMeasure(category, sf_user_id, trackGuid, notificationId, aMeasure
 
 app.get('/Notification', function(req, res) {
 
-	var qcEndpoint = 'https://twonetcom.qualcomm.com/kernel/';
-	var qcKey = 'vh16CKn29ubka83Lad27';
-	var qcSecret = 'WXx2tlAFkwDF2CPHekRfyXD78BeA3FAP';
+
 	var insertMeasureFlag = true;
 
 	var notification = {
@@ -556,7 +553,7 @@ app.get('/Notification', function(req, res) {
 		function(err, result) {
 			if (err) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
-				res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+				res.send(505, {status:505, message: 'Internal error.', type:'internal'});
 				return;
 			}
 			if (result.rows.length < 1) {
@@ -580,7 +577,7 @@ app.get('/Notification', function(req, res) {
 					done(); // release client back to the pool
 					if (err) {
 						console.log('Handling /Notification, unable to insert notification to postgres db. ' + JSON.stringify(err));
-						res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+						res.send(506, {status:506, message: 'Internal error.', type:'internal'});
 						return;
 					} else {
 						notification.id = result.rows[0].id;	
@@ -594,7 +591,7 @@ app.get('/Notification', function(req, res) {
 							checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) {
 								if (err) {
 									console.log('Handling /Notification, no connection to SF org. Notification processing halted. '+ JSON.stringify(err));
-									res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+									res.send(507, {status:507, message: 'Internal error.', type:'internal'});
 									return;
 								}				
 		
@@ -640,7 +637,7 @@ app.get('/Notification', function(req, res) {
 									function callback(error, response, body) {
 										if (error || response.statusCode != 200) {
 											console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
-											res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+											res.send(508, {status:508, message: 'Internal error.', type:'internal'});
 											return;
 										}
 										else {
@@ -650,10 +647,10 @@ app.get('/Notification', function(req, res) {
 											var aMeasureResponse = JSON.parse(body);
 											console.log('Response: ' + JSON.stringify(aMeasureResponse));
 
-											insertMeasure(notification.category, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
+											insertMeasure(notification.category, notification.sf_org_id, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
 												if (err) {
 												  console.log('Handling /Notification, error inserting new measure response: ' + JSON.stringify(err) + ' Measure response: ' + JSON.stringify(aMeasureResponse));
-												  res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+												  res.send(509, {status:509, message: 'Internal error.', type:'internal'});
 												  return;
 												} else {
 													res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
