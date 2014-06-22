@@ -89,6 +89,12 @@ app.get('/', function(req, res){
 });
 
 app.get('/authOrg', function(req, res) {
+	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
+    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	res.redirect("https://" + req.headers.host + req.url);
+    	return;
+	}
+	
 	res.render("authOrg", 
 		{ title: 'Enter Salesforce Authentication Information', 
 		  defaults: {
@@ -122,7 +128,6 @@ function initSFOrgConnection(orgid) {
 
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
-
 	initSFOrgConnection(req.body.org_id);
 	
 	res.redirect(oauth[req.body.org_id].redirectURL);
@@ -355,8 +360,12 @@ app.get('/testencdisplay', function(req, res) {
 });
 
 app.get('/simreg', function(req, res) {
-	// limit to https
-	
+	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
+    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	res.redirect("https://" + req.headers.host + req.url);
+    	return;
+	}
+
 
 	res.render("simreg", 
 		{ title: 'Enter Device info', 
@@ -371,6 +380,11 @@ app.get('/simreg', function(req, res) {
 
 
 app.post('/register', function(req, res) {
+	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
+    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	res.redirect("https://" + req.headers.host + req.url);
+    	return;
+	}
 	
 	var dev = {
 		sf_user_id: req.body.sf_user_id || '',		
