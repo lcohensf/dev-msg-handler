@@ -76,7 +76,18 @@ app.configure('production', function(){
 });
 
 // Routes
-app.get('/', routes.index);
+app.get('/', function(req, res){
+ if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
+    console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    res.redirect("https://" + req.headers.host + req.url);
+    
+  }
+  else {
+    //the rest of your logic to handle this route
+	res.render('index', { title: 'Salesforce - Qualcomm Device Message Handler' });
+
+  }
+});
 
 app.get('/authOrg', function(req, res) {
 	res.render("authOrg", 
