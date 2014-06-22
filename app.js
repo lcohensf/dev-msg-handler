@@ -30,13 +30,20 @@ var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
 var connectedAppClientId = process.env.CLIENT_ID || '';
 var connectedAppClientSecret = process.env.CLIENT_SECRET || '';
-var pubkey = fs.readFileSync('public.key').toString();
-var privkey = fs.readFileSync('private.key').toString();
 var runlocal = redir.search('localhost') != -1;
 var qcEndpoint = process.env.QCEndpoint || '';
 var qcKey = process.env.QCKey || '';
 var qcSecret = process.env.QCSecret || '';
 var jwtSecret = process.env.JWTSecret || '';
+var pubkey = '';
+var privkey = '';
+if (runlocal == true) {
+	pubkey = fs.readFileSync('../public.key').toString();
+	privkey = fs.readFileSync('../private.key').toString();
+} else {
+	pubkey = process.env.PUBKey || '';
+	privkey = process.env.PRIVKey || '';
+}
 
 /*
 	Fields in oauth objects array
