@@ -159,8 +159,24 @@ app.get(redirRoute, function(req, res) {
 					debugMsg(res, "error", {title: 'Unable to clear any existing oauth records in postgres db for org: ' + orgid, data: err});
 					return;
 				}
-				client.query('INSERT INTO "Qualcomm".oauth (org_id, refresh_token) VALUES ($1, $2)',
-					[orgid, oauth[orgid].oauthObj.refresh_token], 
+				/*
+				INSERT INTO "Qualcomm".oauth("org_id", "refresh_token")
+				SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token
+				FROM (VALUES ($1, $2)) as vals(org_id, refresh_token)
+				CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
+				*/	
+
+				var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token FROM (VALUES ($1, $2)) as vals(org_id, refresh_token) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys';
+				var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token) VALUES ($1, $2)';
+				var insertstmt = pgcryptoinsert;
+				var insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, pubkey];
+
+				if (runlocal == true) {
+					insertstmt = noncryptoinsert;
+					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token];
+				}
+				
+				client.query(insertstmt, insertarray, 
 					function(err, result) {
 						done(); // release client back to the pool
 						if (err) {
@@ -210,13 +226,29 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	}
 	else {
 	
+		/*
+		SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt
+		FROM "Qualcomm".oauth 
+		CROSS JOIN (SELECT dearmor($2) as privkey) as keys
+		where oauth.org_id = $1
+		*/	
+
+		var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
+		var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token FROM "Qualcomm".oauth where org_id = $1';
+		var selectstmt = pgcryptoselect;
+		var selectarray = [tOrgId, privkey];
+
+		if (runlocal == true) {
+			selectstmt = noncryptoselect;
+			selectarray = [tOrgId];
+		}
+	
 		pg.connect(pgConnectionString, function(err, client, done) {
 			if (err) {
 				console.log('Attempting to check or refresh authentication. Unable to connect to postgres db. ' + JSON.stringify(err));
 				return;
 			}
-			client.query('SELECT oauth.org_id, oauth.refresh_token FROM "Qualcomm".oauth where org_id = $1',	
-				[tOrgId], 
+			client.query(selectstmt, selectarray, 
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {
@@ -227,9 +259,17 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 					}		
 
 					console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
+					
+
+
 
 					initSFOrgConnection(result.rows[0].org_id, connectedAppClientId, connectedAppClientSecret);
-					oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token};
+					if (runlocal == true) {
+						oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token};	
+					} else {
+						oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token_decrypt};	
+					}
+					
 					
 					oauth[tOrgId].connection.refreshToken({oauth: oauth[tOrgId].oauthObj}, function(err, resp) {
 						if (err) {
@@ -388,7 +428,7 @@ app.post('/register', function(req, res) {
 	
 	var dev = {
 		sf_user_id: req.body.sf_user_id || '',		
-		sf_org_id: req.body.sf_org_id || '', 
+		sf_org_id: req.body.sf_org_id || '',
 		jwt_token: req.body.jwt_token || ''
 	};
 	
