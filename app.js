@@ -600,9 +600,13 @@ app.get('/Notification', function(req, res) {
 												  res.send(509, {status:509, message: 'Internal error.', type:'internal'});
 												  return;
 												} else {
-													res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
-													res.end();
-							  
+													if (debugUI == 'true') {
+														res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
+														res.end();
+													} else {													
+														res.send(200, {status:200, message: 'Measurement inserted.'});
+														res.end();
+							  						}
 												}
 											});
 										}
