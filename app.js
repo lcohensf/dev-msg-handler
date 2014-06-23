@@ -215,6 +215,9 @@ app.get(redirRoute, function(req, res) {
 });
 
 //e.g. checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) { ... });
+// pass false if you expect that there is a current authentication object in memory for the given org id; if there isn't this method
+// will attempt to refresh the session token 
+// pass true if you want to force a refresh of the session token without checking whether there is an authentication object in memory
 function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	console.log('checkOrRefreshAuthentication, refresh = ' + refresh + ' orgId = ' + tOrgId);
 	
@@ -287,136 +290,9 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 
 }
 
-app.get('/testenc', function(req, res) {
-		res.render("testenc", 
-			{ title: 'Enter data'
-
-			} );
-});
-
-app.post('/testencinsert', function(req, res) {
-	
-	var testdata = {
-		id: '',
-		enc: req.body.enc || '',		
-		notenc: req.body.notenc || ''
-	};
-
-	/*
-	INSERT INTO "Qualcomm".testend("enc", "notenc")
-	SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc
-	FROM (VALUES ($1, $2)) as vals(notenc, enc)
-	CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
-	*/	
-
-	var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
-	var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
-	var insertstmt = pgcryptoinsert;
-	var insertarray = [testdata.notenc, testdata.enc, pubkey];
-
-	if (runlocal == true) {
-		insertstmt = noncryptoinsert;
-		insertarray = [testdata.notenc, testdata.enc];
-	}
-	pg.connect(pgConnectionString, function(err, client, done) {
-		if (err) {
-			
-			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
-			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
-			return;
-		}
-		client.query(insertstmt, insertarray, 
-				function(err, result) {
-					done(); // release client back to the pool
-					if (err) {
-						console.log('Handling /testencinsert, unable to insert record to postgres db. ' + JSON.stringify(err));
-						res.send(502, {status:502, message: 'Unable to insert record to postgres db.', type:'internal'});
-						return;
-					} else {
-						testdata.id = result.rows[0].id;	
-						console.log('new testdata id: ' + testdata.id);
-						res.redirect('/testencdisplay?id='+testdata.id);
-						res.end();
-					}
-		});
-
-	});		
-
-});
-
-// display the test encode data
-app.get('/testencdisplay', function(req, res) {
-
-	/*
-	SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt
-	FROM "Qualcomm".testenc 
-	CROSS JOIN (SELECT dearmor($2) as privkey) as keys
-	where testenc.id = $1
-	*/	
-
-	var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
-	var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
-	var selectstmt = pgcryptoselect;
-	var selectarray = [req.query.id, privkey];
-
-	if (runlocal == true) {
-		selectstmt = noncryptoselect;
-		selectarray = [req.query.id];
-	}
-
-  pg.connect(pgConnectionString, function(err, client, done) {
-	if (err) {
-		console.log('Handling /testencdisplay, unable to connect to postgres db. ' + JSON.stringify(err));
-		res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
-		return;
-	}
-	client.query(selectstmt, selectarray,
-		function(err, result) {
-			done(); // release client back to the pool
-			if (err) {
-				console.log('Handling /testencdisplay, unable to retrieve testdata from postgres db.' + JSON.stringify(err));
-				return;
-			}
-			if (result.rows.length < 1) {
-				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.query.id);
-				return;
-			}
-			
-			var testdata = {
-				id:result.rows[0].id || 'error',	
-				notenc: result.rows[0].notenc || 'error'
-			};
-			if (runlocal == true) {
-				testdata.enc = result.rows[0].enc || 'error';	
-			} else {
-				testdata.enc =  result.rows[0].encdecrypt || 'error';	
-			}
-			console.log('result: ' + JSON.stringify(result.rows[0]));
-			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
-			res.end();
-		});
-   });
-
-});
-
-app.get('/simreg', function(req, res) {
-	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
-    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
-    	res.redirect("https://" + req.headers.host + req.url);
-    	return;
-	}
 
 
-	res.render("simreg", 
-		{ title: 'Enter Device info', 
-		  defaults: {
-			sf_user_id: '',
-			sf_org_id: testingOrgId,
-			jwt_token: jwt.encode({orgid: testingOrgId}, jwtSecret)
-		  }
-		} );
 
-});
 
 
 app.post('/register', function(req, res) {
@@ -493,7 +369,7 @@ function upsertJWTToken(tokenStr, orgid, oauthElement, callback) {
 	console.log('object to upsert: ' + JSON.stringify(obj));
 	checkOrRefreshAuthentication(false, orgid, function(err, refreshedOauthElement) {
 		if (err) {
-			return callback('Error retrieving authentication object: ' + err, null);
+			return callback('Error checking or refreshing authentication: ' + err, null);
 
 		} else {
 			oauthElement = refreshedOauthElement;
@@ -778,3 +654,126 @@ app.get('/measurements__c/:id', function(req, res) {
 app.listen(port, function(){
   console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
 });
+
+/*
+
+app.get('/simreg', function(req, res) {
+	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
+    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	res.redirect("https://" + req.headers.host + req.url);
+    	return;
+	}
+
+
+	res.render("simreg", 
+		{ title: 'Enter Device info', 
+		  defaults: {
+			sf_user_id: '',
+			sf_org_id: testingOrgId,
+			jwt_token: jwt.encode({orgid: testingOrgId}, jwtSecret)
+		  }
+		} );
+
+});
+
+app.get('/testenc', function(req, res) {
+		res.render("testenc", 
+			{ title: 'Enter data'
+
+			} );
+});
+
+app.post('/testencinsert', function(req, res) {
+	
+	var testdata = {
+		id: '',
+		enc: req.body.enc || '',		
+		notenc: req.body.notenc || ''
+	};
+
+
+
+	var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
+	var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
+	var insertstmt = pgcryptoinsert;
+	var insertarray = [testdata.notenc, testdata.enc, pubkey];
+
+	if (runlocal == true) {
+		insertstmt = noncryptoinsert;
+		insertarray = [testdata.notenc, testdata.enc];
+	}
+	pg.connect(pgConnectionString, function(err, client, done) {
+		if (err) {
+			
+			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
+			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
+			return;
+		}
+		client.query(insertstmt, insertarray, 
+				function(err, result) {
+					done(); // release client back to the pool
+					if (err) {
+						console.log('Handling /testencinsert, unable to insert record to postgres db. ' + JSON.stringify(err));
+						res.send(502, {status:502, message: 'Unable to insert record to postgres db.', type:'internal'});
+						return;
+					} else {
+						testdata.id = result.rows[0].id;	
+						console.log('new testdata id: ' + testdata.id);
+						res.redirect('/testencdisplay?id='+testdata.id);
+						res.end();
+					}
+		});
+
+	});		
+
+});
+
+// display the test encode data
+app.get('/testencdisplay', function(req, res) {
+
+
+	var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
+	var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
+	var selectstmt = pgcryptoselect;
+	var selectarray = [req.query.id, privkey];
+
+	if (runlocal == true) {
+		selectstmt = noncryptoselect;
+		selectarray = [req.query.id];
+	}
+
+  pg.connect(pgConnectionString, function(err, client, done) {
+	if (err) {
+		console.log('Handling /testencdisplay, unable to connect to postgres db. ' + JSON.stringify(err));
+		res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
+		return;
+	}
+	client.query(selectstmt, selectarray,
+		function(err, result) {
+			done(); // release client back to the pool
+			if (err) {
+				console.log('Handling /testencdisplay, unable to retrieve testdata from postgres db.' + JSON.stringify(err));
+				return;
+			}
+			if (result.rows.length < 1) {
+				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.query.id);
+				return;
+			}
+			
+			var testdata = {
+				id:result.rows[0].id || 'error',	
+				notenc: result.rows[0].notenc || 'error'
+			};
+			if (runlocal == true) {
+				testdata.enc = result.rows[0].enc || 'error';	
+			} else {
+				testdata.enc =  result.rows[0].encdecrypt || 'error';	
+			}
+			console.log('result: ' + JSON.stringify(result.rows[0]));
+			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
+			res.end();
+		});
+   });
+
+});
+*/
