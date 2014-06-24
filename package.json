@@ -13,6 +13,7 @@
     "async": "0.2.x",
     "pg": "2.11.x",
     "request": "2.34.x",
-    "jwt-simple": "0.2.0"
+    "jwt-simple": "0.2.0",
+    "strftime": "0.8.x"
   }
 }
