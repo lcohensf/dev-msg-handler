@@ -486,6 +486,11 @@ app.get('/Notification', function(req, res) {
 		url: req.url
 	};
 	console.log('partially initialized notification record: ' + JSON.stringify(notification));
+	if (notification.startDate != notification.endDate) {
+		console.log('changing startDate to equal endDate, otherwise unknown how many measurements we may receive.');
+		notification.startDate = notification.endDate;
+		console.log('dates in notification record, updated: ' + JSON.stringify(notification));
+	}
 
   //retrieve registered device record from postgres
   // todo - cache registered devices
