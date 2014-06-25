@@ -547,7 +547,7 @@ app.get('/Notification', function(req, res) {
 									return;
 								}				
 		
-
+								console.log ('Notification id: ' + notification.id + ' Category: ' + notification.category);
 								if (notification.category == 'blood' || notification.category == 'activity' || notification.category == 'body')
 								{
 									var catEndPoint = '';
@@ -607,10 +607,10 @@ app.get('/Notification', function(req, res) {
 												} else {
 													if (debugUI == 'true') {
 														res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
-														res.end();
+														return;
 													} else {													
 														res.send(200, {status:200, message: 'Measurement inserted.'});
-														res.end();
+														return;
 							  						}
 												}
 											});
@@ -619,7 +619,16 @@ app.get('/Notification', function(req, res) {
 
 									// retrieve measure from Qualcomm
 									request(options, callback);
-								} // end if (notification.category ...
+								} else {
+									if (debugUI == 'true') {
+										debugMsg(res, "error", {title: 'Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category});
+									} else {
+										console.log ('Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category);
+										res.send(550, {status:550, message: 'Unknown notification category.'});
+										return;
+									}
+								}
+								 // end if (notification.category ...
 							});	// checkOrRefreshAuthentication	
 						} // if insertMeasureFlag
 											
