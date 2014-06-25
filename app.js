@@ -222,7 +222,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	console.log('checkOrRefreshAuthentication, refresh = ' + refresh + ' orgId = ' + tOrgId);
 	
 	var self = this;
-	if (refresh == 'false' && (typeof oauth[tOrgId] !== 'undefined') && (typeof oauth[tOrgId].oauthObj !== 'undefined')) {
+	if (refresh == false && (typeof oauth[tOrgId] !== 'undefined') && (typeof oauth[tOrgId].oauthObj !== 'undefined')) {
 		// appears we have authenticated this org; possible the access token is expired but we'll catch that on a DML execution
 		console.log('refresh == false and found oauth object in memory on call to checkOrRefreshAuthentication');
 		return callback(null, oauth[tOrgId]);
