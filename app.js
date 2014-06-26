@@ -10,6 +10,15 @@ var express = require('express')
 
 
 var oauth = []; // array of authentication objects, one per SF org, indexed by org id
+/*
+	Fields in oauth objects array
+	
+	oauth[orgid] = {
+		connection: '', //  returned by nforce.createConnection()
+		redirectURL: '', // built up as part of creating connection to Salesforce
+		oauthObj: '', // response from authentication flow, only care about refresh_token field	
+	};
+*/
 
 var debugUI = process.env.DEBUG_UI || 'false';
 function debugMsg(res, viewType, opts) {
@@ -45,15 +54,7 @@ if (runlocal == true) {
 	privkey = process.env.PRIVKey || '';
 }
 
-/*
-	Fields in oauth objects array
-	
-	oauth[orgid] = {
-		connection: '', //  returned by nforce.createConnection()
-		redirectURL: '', // built up as part of creating connection to Salesforce
-		oauthObj: '', // response from authentication flow, only care about refresh_token field	
-	};
-*/
+
 // create the server
 var app = module.exports = express.createServer();
 
@@ -90,7 +91,7 @@ app.get('/', function(req, res){
 
 app.get('/authOrg', function(req, res) {
 	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
-    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	console.log("Caught /authOrg over http. Redirecting to: " + "https://" + req.headers.host + req.url);
     	res.redirect("https://" + req.headers.host + req.url);
     	return;
 	}
@@ -184,10 +185,10 @@ app.get(redirRoute, function(req, res) {
 							return;
 						}
 						//upsert jwtToken to SF org
-						upsertJWTToken(jwt.encode({orgid: orgid}, jwtSecret), orgid, oauth[orgid], function(err, refreshedOauthElement) {
+						upsertJWTToken(jwt.encode({orgid: orgid}, jwtSecret), orgid, function(err) {
 							if (err) {
 							  console.log('Error inserting JWT token to SF org: ' + JSON.stringify(err));
-							  res.send(501, {status:501, message: 'Internal error.', type:'internal'});
+							  res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 							  res.end();
 							  return;
 							} else {
@@ -214,7 +215,7 @@ app.get(redirRoute, function(req, res) {
 	
 });
 
-//e.g. checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) { ... });
+//e.g. checkOrRefreshAuthentication(false, notification.sf_org_id, function(err) { ... });
 // pass false if you expect that there is a current authentication object in memory for the given org id; if there isn't this method
 // will attempt to refresh the session token 
 // pass true if you want to force a refresh of the session token without checking whether there is an authentication object in memory
@@ -225,7 +226,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	if (refresh == false && (typeof oauth[tOrgId] !== 'undefined') && (typeof oauth[tOrgId].oauthObj !== 'undefined')) {
 		// appears we have authenticated this org; possible the access token is expired but we'll catch that on a DML execution
 		console.log('refresh == false and found oauth object in memory on call to checkOrRefreshAuthentication');
-		return callback(null, oauth[tOrgId]);
+		return callback(null);
 	}
 	else {
 	
@@ -255,10 +256,10 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {
-						return callback('Unable to retrieve registered device info from postgres db. - ' + err, null);
+						return callback('Unable to retrieve registered device info from postgres db. - ' + err);
 					}
 					if (result.rows.length < 1) {
-						return callback('unregistered org or previous authentication failed to store oauth record in postgres', null);
+						return callback('unregistered org or previous authentication failed to store oauth record in postgres');
 					}		
 
 					console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
@@ -276,12 +277,12 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 					
 					oauth[tOrgId].connection.refreshToken({oauth: oauth[tOrgId].oauthObj}, function(err, resp) {
 						if (err) {
-							return callback('Unable to refresh token for org: ' + tOrgId + '. ' + err, null);
+							return callback('Unable to refresh token for org: ' + tOrgId + '. ' + err);
 			
 						} else {
 							oauth[tOrgId].oauthObj = resp;
 							console.log('refresh token used data in db appears to have worked. full oauth: ' + JSON.stringify(oauth[tOrgId].oauthObj));
-							return callback(null, oauth[tOrgId]);
+							return callback(null);
 						}
 					});
 			});
@@ -297,7 +298,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 
 app.post('/register', function(req, res) {
 	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
-    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
+    	console.log("Caught /register over http. Redirecting to: " + "https://" + req.headers.host + req.url);
     	res.redirect("https://" + req.headers.host + req.url);
     	return;
 	}
@@ -313,7 +314,7 @@ app.post('/register', function(req, res) {
 	console.log('decoded = ' + decoded.orgid + '  sf_org_id = ' + dev.sf_org_id);
 	if (decoded.orgid != dev.sf_org_id) {
 		//res.render('unauthorized', { title: 'Unauthorized for registration of devices. Invalid JWT token.' });
-		res.send(503, {status:503, message: 'Unauthorized for registration of devices. Invalid JWT token.', type:'internal'});
+		res.send(500, {status:500, message: 'Unauthorized for registration of devices. Invalid JWT token.', type:'internal'});
 		return;
 	}
 
@@ -341,7 +342,7 @@ app.post('/register', function(req, res) {
 						} else {
 						
 						console.log('Error inserting device: ' + JSON.stringify(err));	
-						res.send(504, {status:504, message: 'Unable to insert device to postgres db.', type:'internal'});
+						res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
 						//debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
 						return;
 						}
@@ -357,9 +358,9 @@ app.post('/register', function(req, res) {
   res.send(200, {status:200, message: 'Device registration successful', dev: JSON.stringify(dev)});
 });
 
-// upsertJWTToken may refresh oauthElement
-// upsertJWTToken(token, oauthElement, function(err, refreshedOauthElement) ...
-function upsertJWTToken(tokenStr, orgid, oauthElement, callback) {
+
+// upsertJWTToken(token, function(err) ...
+function upsertJWTToken(tokenStr, orgid, callback) {
 	var tokenRecord = {
 		token__c: tokenStr
 	};						
@@ -367,17 +368,17 @@ function upsertJWTToken(tokenStr, orgid, oauthElement, callback) {
 	var obj = nforce.createSObject('JWTToken__c', tokenRecord);
 	obj.setExternalId('orgid__c', orgid);
 	console.log('object to upsert: ' + JSON.stringify(obj));
-	checkOrRefreshAuthentication(false, orgid, function(err, refreshedOauthElement) {
+	checkOrRefreshAuthentication(false, orgid, function(err) {
 		if (err) {
-			return callback('Error checking or refreshing authentication: ' + err, null);
+			return callback('Error checking or refreshing authentication: ' + err);
 
 		} else {
-			oauthElement = refreshedOauthElement;
-			oauthElement.connection.upsert({sobject: obj, oauth: oauthElement.oauthObj}, function(err, resp){
+
+			oauth[orgid].connection.upsert({sobject: obj, oauth: oauth[orgid].oauthObj}, function(err, resp){
 				if (err) {
 					console.log('Error inserting JWTToken. err: ' + JSON.stringify(err));
-					return callback('Error inserting JWTToken: ' + err, oauthElement);
-				} else {return callback(null, oauthElement);} 
+					return callback('Error inserting JWTToken: ' + err);
+				} else {return callback(null);} 
 			});
 		}
 		
@@ -385,87 +386,142 @@ function upsertJWTToken(tokenStr, orgid, oauthElement, callback) {
 
 }
 
-// insertMeasure may refresh oauthElement
-// insertMeasure(category, ..., oauthElement, function(err, measureId, refreshedOauthElement) ...
-function insertMeasure(category, orgid, sf_user_id, trackGuid, notificationId, aMeasureResponse, oauthElement, callback) {
-	var aMeasure;						
+
+
+function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, aMeasureResponse) {
+
+	var arraySize = 0;
 	
-	if (category == 'blood') {
-		var aMR = aMeasureResponse.measureResponse.measures.measure;
-		aMeasure = {
-			Date_Time__c: aMR.time * 1000,
-			glucose__c: aMR.blood.glucose,
-			diastolic__c: aMR.blood.diastolic,
-			map__c: aMR.blood.map,
-			Pulse__c: aMR.blood.pulse,
-			systolic__c: aMR.blood.systolic,
-			spo2__c: aMR.blood.spo2,
-			Device__r : { GUID__c: trackGuid }, 
-			Health__r : { GUID__c: sf_user_id}, 
-			Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
-			Debug_Measurement__c: JSON.stringify(aMeasureResponse)				
-		};
+	// ensure measures are in array; Qualcomm isn't consistent in JSON structure for filtered responses
+	if (category == 'blood' || category == 'body') {	
+		if (!(aMeasureResponse.measureResponse.measures.measure instanceof Array)) {
+			aMeasureResponse.measureResponse.measures.measure = [aMeasureResponse.measureResponse.measures.measure];
+		}
+		arraySize = aMeasureResponse.measureResponse.measures.measure.length;
+	} else if (category == 'activity') {
+		if (!(aMeasureResponse.activityResponse.activities.activity instanceof Array)) {
+			aMeasureResponse.activityResponse.activities.activity = [aMeasureResponse.activityResponse.activities.activity];		
+		}
+		arraySize = aMeasureResponse.activityResponse.activities.activity.length;
+	} 
+	var debugMeasurementText;
+	if (arraySize == 1) {
+		debugMeasurementText = JSON.stringify(aMeasureResponse);
+	} else {
+		debugMeasurementText =  'Measure response is for multiple measurements.';
 	}
-	else if (category == 'activity') {	
-
-		var aAR = aMeasureResponse.activityResponse.activities.activity;
-		aMeasure = {
-			Date_Time__c: aAR.endTime * 1000,
-			Start_Time__c: aAR.startTime * 1000,
-			Steps__c: aAR.steps,
-			Mets__c: aAR.mets,
-			Distance__c: aAR.distance,
-			Calories__c: aAR.calories,
-			Duration__c: aAR.duration,
-			Device__r : { GUID__c: trackGuid }, 
-			Health__r : { GUID__c: sf_user_id},
-			type__c: aAR.type,
-			Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
-			Debug_Measurement__c: JSON.stringify(aMeasureResponse)		
-		};
-
-	}
-	else if (category == 'body') {
-		var aMR = aMeasureResponse.measureResponse.measures.measure;
-		aMeasure = {
-			Date_Time__c: aMR.time * 1000,
-        	weight__c: aMR.body.weight,
-			Device__r : { GUID__c: trackGuid }, 
-			Health__r : { GUID__c: sf_user_id},
-        	Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
-			Debug_Measurement__c: JSON.stringify(aMeasureResponse)
-		};	
-	}
-	console.log('aMeasure to insert: ' + JSON.stringify(aMeasure));
-
-	// currently only supporting insert of first measure or activity; nForce only supports insert of one object at a time
-  var obj = nforce.createSObject('Measurement__c', aMeasure);
-  oauthElement.connection.insert({sobject: obj, oauth: oauthElement.oauthObj}, function(err, resp){
-  	// todo: is there any reason to implement idempotency?
-	if (err) {
-		// debug - next line
-		//return callback('Error inserting measure. err: ' + JSON.stringify(err) + '. obj: ' + JSON.stringify(obj), null, oauthElement);
-
-		// to do: check the err and only retry if it's an expired token
-		
-		console.log('Error inserting measure. Try to refresh token and retry once.');
-		checkOrRefreshAuthentication(true, orgid, function(err, refreshedOauthElement) {
-			if (err) {
-				return callback('Error refreshing expired token: ' + err, null, null);
-		
-			} else {
-				oauthElement = refreshedOauthElement;
-				oauthElement.connection.insert({sobject: obj, oauth: oauthElement.oauthObj}, function(err, resp){
-					if (err) {
-						return callback('Error inserting measure after refreshing token. err: ' + JSON.stringify(err) + '. obj: ' + JSON.stringify(obj), null, oauthElement);
-					} else {return callback(null, resp.id, oauthElement);} 
-				});
-			}
+	
+	var sfMeasures = []; // JSON format of measures to insert
+	var objs = [];	// nForce objects to insert
+	
+	for (i = 0; i < arraySize; i++) {
 			
-		});  
+		if (category == 'blood') {
+			var aMR = aMeasureResponse.measureResponse.measures.measure[i];
+			sfMeasures[i] = {
+				Date_Time__c: aMR.time * 1000,
+				glucose__c: aMR.blood.glucose,
+				diastolic__c: aMR.blood.diastolic,
+				map__c: aMR.blood.map,
+				Pulse__c: aMR.blood.pulse,
+				systolic__c: aMR.blood.systolic,
+				spo2__c: aMR.blood.spo2,
+				Device__r : { GUID__c: trackGuid }, 
+				Health__r : { GUID__c: sf_user_id}, 
+				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
+				Debug_Measurement__c: debugMeasurementText				
+			};
+		}
+		else if (category == 'activity') {	
+			var aAR = aMeasureResponse.activityResponse.activities.activity[i];
+			sfMeasures[i] = {
+				Date_Time__c: aAR.endTime * 1000,
+				Start_Time__c: aAR.startTime * 1000,
+				Steps__c: aAR.steps,
+				Mets__c: aAR.mets,
+				Distance__c: aAR.distance,
+				Calories__c: aAR.calories,
+				Duration__c: aAR.duration,
+				Device__r : { GUID__c: trackGuid }, 
+				Health__r : { GUID__c: sf_user_id},
+				type__c: aAR.type,
+				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
+				Debug_Measurement__c: debugMeasurementText		
+			};
 
-	} else {return callback(null, resp.id, oauthElement);} 	
-  });
+		}
+		else if (category == 'body') {
+			var aMR = aMeasureResponse.measureResponse.measures.measure[i];
+			sfMeasures[i] = {
+				Date_Time__c: aMR.time * 1000,
+				weight__c: aMR.body.weight,
+				Device__r : { GUID__c: trackGuid }, 
+				Health__r : { GUID__c: sf_user_id},
+				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
+				Debug_Measurement__c: debugMeasurementText
+			};	
+		}
+		objs[i] = nforce.createSObject('Measurement__c', sfMeasures[i]);
+	}
+	
+/*
+//recursive pattern
+var filenames = [...]
+
+function uploader(i) {
+  if( i < filenames.length ) {
+    upload( filenames[i], function(err) {
+      if( err ) {
+        console.log('error: '+err)
+      }
+      else {
+        uploader(i+1)
+      }
+    })
+  }
+}
+uploader(0)
+*/
+	  
+  
+  	  //recursive pattern to insert multiple measures
+  	  // only try to refresh token one time
+  	  var refreshTokenTry = 0;
+	  
+	  function insertEachMeasure(i) {
+	  	if (i < objs.length) {
+	  	  console.log('about to insert measure: ' + JSON.stringify(sfMeasures[i]));
+		  oauth[orgid].connection.insert({sobject: objs[i], oauth: oauth[orgid].oauthObj}, function(err, resp){
+
+			if (err) {	
+				console.log('Error inserting measure. ' + JSON.stringify(err));
+				if (refreshTokenTry == 0) {
+					console.log('Try refreshing token once per call to insertMeasures if error on insert.');
+					refreshTokenTry = 1;
+					checkOrRefreshAuthentication(true, orgid, function(err) {
+						if (err) {
+							console.log('Error refreshing expired token: ' + JSON.stringify(err));
+							return;
+						} else {
+							oauth[orgid].connection.insert({sobject: objs[i], oauth: oauth[orgid].oauthObj}, function(err, resp){
+								if (err) {
+									console.log('Error inserting measure after refreshing token. err: ' + JSON.stringify(err) + '. obj: ' + JSON.stringify(objs[i]));
+									return;
+								} else {insertEachMeasure(i+1);} 
+							});
+						}
+			
+					});  
+				}
+
+			} else {
+				insertEachMeasure(i+1);
+			} 	
+		  });
+		}
+  	  }
+  	  insertEachMeasure(0); 
+
 
 }
 
@@ -486,11 +542,13 @@ app.get('/Notification', function(req, res) {
 		url: req.url
 	};
 	console.log('partially initialized notification record: ' + JSON.stringify(notification));
+	/*
 	if (notification.startDate != notification.endDate) {
 		console.log('changing startDate to equal endDate, otherwise unknown how many measurements we may receive.');
 		notification.startDate = notification.endDate;
 		console.log('dates in notification record, updated: ' + JSON.stringify(notification));
 	}
+	*/
 
   //retrieve registered device record from postgres
   // todo - cache registered devices
@@ -505,7 +563,7 @@ app.get('/Notification', function(req, res) {
 		function(err, result) {
 			if (err) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
-				res.send(505, {status:505, message: 'Internal error.', type:'internal'});
+				res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 				return;
 			}
 			if (result.rows.length < 1) {
@@ -514,8 +572,9 @@ app.get('/Notification', function(req, res) {
 				notification.sf_org_id =  'unknown user, org unknown';
 			} else {
 				notification.sf_org_id = result.rows[0].sf_org_id;
+				//console.log('result: ' + JSON.stringify(result.rows[0]));
 			}
-			console.log('result: ' + JSON.stringify(result.rows[0]));
+			
 			
 							
 		    // insert notification into postgres, retrieving id for record	
@@ -529,7 +588,7 @@ app.get('/Notification', function(req, res) {
 					done(); // release client back to the pool
 					if (err) {
 						console.log('Handling /Notification, unable to insert notification to postgres db. ' + JSON.stringify(err));
-						res.send(506, {status:506, message: 'Internal error.', type:'internal'});
+						res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 						return;
 					} else {
 						notification.id = result.rows[0].id;	
@@ -540,10 +599,10 @@ app.get('/Notification', function(req, res) {
 							return;
 						} else {														
 							// check that we are authenticated with this SF org, and if not authenticate with stored token
-							checkOrRefreshAuthentication(false, notification.sf_org_id, function(err, oauthElement) {
+							checkOrRefreshAuthentication(false, notification.sf_org_id, function(err) {
 								if (err) {
 									console.log('Handling /Notification, no connection to SF org. Notification processing halted. '+ JSON.stringify(err));
-									res.send(507, {status:507, message: 'Internal error.', type:'internal'});
+									res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 									return;
 								}				
 		
@@ -589,31 +648,22 @@ app.get('/Notification', function(req, res) {
 									function callback(error, response, body) {
 										if (error || response.statusCode != 200) {
 											console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
-											res.send(508, {status:508, message: 'Internal error.', type:'internal'});
+											res.send(500, {status:500, message: 'Internal error.', type:'internal'});
 											return;
 										}
 										else {
-											console.log('STATUS: ' + response.statusCode);
-											console.log('HEADERS: ' + JSON.stringify(response.headers));
+											console.log('Received measurements back from Qualcomm, STATUS: ' + response.statusCode);
+											//console.log('HEADERS: ' + JSON.stringify(response.headers));
 
 											var aMeasureResponse = JSON.parse(body);
-											console.log('Response: ' + JSON.stringify(aMeasureResponse));
+											//console.log('Response: ' + JSON.stringify(aMeasureResponse));
 
-											insertMeasure(notification.category, notification.sf_org_id, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse, oauthElement, function(err, measureId, refreshedOauthElement) {
-												if (err) {
-												  console.log('Handling /Notification, error inserting new measure response: ' + JSON.stringify(err) + ' Measure response: ' + JSON.stringify(aMeasureResponse));
-												  res.send(509, {status:509, message: 'Internal error.', type:'internal'});
-												  return;
-												} else {
-													if (debugUI == 'true') {
-														res.redirect('/measurements__c/'+measureId+'?org='+notification.sf_org_id);
-														return;
-													} else {													
-														res.send(200, {status:200, message: 'Measurement inserted.'});
-														return;
-							  						}
-												}
-											});
+											// kick off inserts, running asynchronously and return ok
+											insertMeasures(notification.category, notification.sf_org_id, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse);
+											console.log('Inserts of measurements to SF org proceeding for notification id: ' + notification.id);
+											res.send(200, {status:200, message: 'Inserts completed or progressing successfully.'});
+											return;
+
 										}
 									};
 
@@ -624,7 +674,7 @@ app.get('/Notification', function(req, res) {
 										debugMsg(res, "error", {title: 'Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category});
 									} else {
 										console.log ('Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category);
-										res.send(550, {status:550, message: 'Unknown notification category.'});
+										res.send(500, {status:500, message: 'Unknown notification category.'});
 										return;
 									}
 								}
@@ -640,31 +690,23 @@ app.get('/Notification', function(req, res) {
 	
 });
 
+app.get('/simreg', function(req, res) {
 
+	if (runlocal == true) {
 
-// display the Measurement__c
-app.get('/measurements__c/:id', function(req, res) {
-
-  var async = require('async');
-  var obj = nforce.createSObject('Measurement__c', {id: req.params.id});
-  var corgid = req.query.org;
-
-  async.parallel([
-      function(callback){
-        oauth[corgid].connection.query({query: "select count() from Measurement__c where id = '" + req.params.id + "'", oauth: oauth[corgid].oauthObj}, function(err, resp){
-          callback(null, resp);
-        });
-      },
-      function(callback){
-        oauth[corgid].connection.getRecord({sobject: obj, oauth: oauth[corgid].oauthObj}, oauth[corgid].oauthObj, function(err, resp) {
-          callback(null, resp);
-        });
-      },
-  ],
-  // optional callback
-  function(err, results){
-    res.render('showMeasurement', { title: 'Measurement Details', data: results });
-  });  
+		res.render("simreg", 
+			{ title: 'Enter Device info', 
+			  defaults: {
+				sf_user_id: '',
+				sf_org_id: testingOrgId,
+				jwt_token: jwt.encode({orgid: testingOrgId}, jwtSecret)
+			  }
+			} );
+		
+	} else {
+		res.send(403, {status:403, message: 'Action not permitted.'});
+		return;
+	}
 
 });
 
@@ -673,125 +715,3 @@ app.listen(port, function(){
   console.log("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
 });
 
-/*
-
-app.get('/simreg', function(req, res) {
-	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
-    	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
-    	res.redirect("https://" + req.headers.host + req.url);
-    	return;
-	}
-
-
-	res.render("simreg", 
-		{ title: 'Enter Device info', 
-		  defaults: {
-			sf_user_id: '',
-			sf_org_id: testingOrgId,
-			jwt_token: jwt.encode({orgid: testingOrgId}, jwtSecret)
-		  }
-		} );
-
-});
-
-app.get('/testenc', function(req, res) {
-		res.render("testenc", 
-			{ title: 'Enter data'
-
-			} );
-});
-
-app.post('/testencinsert', function(req, res) {
-	
-	var testdata = {
-		id: '',
-		enc: req.body.enc || '',		
-		notenc: req.body.notenc || ''
-	};
-
-
-
-	var pgcryptoinsert = 'INSERT INTO "Qualcomm".testenc("notenc", "enc") SELECT vals.notenc, pgp_pub_encrypt(vals.enc, keys.pubkey) as enc FROM (VALUES ($1, $2)) as vals(notenc, enc) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys returning id';
-	var noncryptoinsert = 	'INSERT INTO "Qualcomm".testenc("notenc", "enc") VALUES ($1, $2) RETURNING id';
-	var insertstmt = pgcryptoinsert;
-	var insertarray = [testdata.notenc, testdata.enc, pubkey];
-
-	if (runlocal == true) {
-		insertstmt = noncryptoinsert;
-		insertarray = [testdata.notenc, testdata.enc];
-	}
-	pg.connect(pgConnectionString, function(err, client, done) {
-		if (err) {
-			
-			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
-			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
-			return;
-		}
-		client.query(insertstmt, insertarray, 
-				function(err, result) {
-					done(); // release client back to the pool
-					if (err) {
-						console.log('Handling /testencinsert, unable to insert record to postgres db. ' + JSON.stringify(err));
-						res.send(502, {status:502, message: 'Unable to insert record to postgres db.', type:'internal'});
-						return;
-					} else {
-						testdata.id = result.rows[0].id;	
-						console.log('new testdata id: ' + testdata.id);
-						res.redirect('/testencdisplay?id='+testdata.id);
-						res.end();
-					}
-		});
-
-	});		
-
-});
-
-// display the test encode data
-app.get('/testencdisplay', function(req, res) {
-
-
-	var pgcryptoselect = 'SELECT testenc.notenc, testenc.id, pgp_pub_decrypt(testenc.enc, keys.privkey) as encdecrypt FROM "Qualcomm".testenc CROSS JOIN (SELECT dearmor($2) as privkey) as keys where testenc.id = $1';
-	var noncryptoselect = 	'SELECT testenc.enc, testenc.notenc, testenc.id FROM "Qualcomm".testenc WHERE testenc.id = $1';
-	var selectstmt = pgcryptoselect;
-	var selectarray = [req.query.id, privkey];
-
-	if (runlocal == true) {
-		selectstmt = noncryptoselect;
-		selectarray = [req.query.id];
-	}
-
-  pg.connect(pgConnectionString, function(err, client, done) {
-	if (err) {
-		console.log('Handling /testencdisplay, unable to connect to postgres db. ' + JSON.stringify(err));
-		res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
-		return;
-	}
-	client.query(selectstmt, selectarray,
-		function(err, result) {
-			done(); // release client back to the pool
-			if (err) {
-				console.log('Handling /testencdisplay, unable to retrieve testdata from postgres db.' + JSON.stringify(err));
-				return;
-			}
-			if (result.rows.length < 1) {
-				console.log('Handling /testencdisplay, a record was not previously inserted for id: ' + req.query.id);
-				return;
-			}
-			
-			var testdata = {
-				id:result.rows[0].id || 'error',	
-				notenc: result.rows[0].notenc || 'error'
-			};
-			if (runlocal == true) {
-				testdata.enc = result.rows[0].enc || 'error';	
-			} else {
-				testdata.enc =  result.rows[0].encdecrypt || 'error';	
-			}
-			console.log('result: ' + JSON.stringify(result.rows[0]));
-			res.render('showTestenc', { title: 'Retrieved test data', data: testdata });
-			res.end();
-		});
-   });
-
-});
-*/
