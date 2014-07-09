@@ -192,7 +192,7 @@ app.get(redirRoute, function(req, res) {
 					function(err, result) {
 						done(); // release client back to the pool
 						if (err) {
-							debugMsg(res, "error", {title: 'Unable to insert to postgres db.', data: err});
+							debugMsg(res, "error", {title: 'Unable to insert to postgres db.', data: JSON.stringify(err)});
 							return;
 						}
 						//upsert jwtToken to SF org
