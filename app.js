@@ -188,6 +188,9 @@ app.get(redirRoute, function(req, res) {
 					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret];
 				}
 				
+				console.log('insertstmt: ' + insertstmt);
+				console.log('insertarray: ' + JSON.stringify(insertarray));
+				
 				client.query(insertstmt, insertarray, 
 					function(err, result) {
 						done(); // release client back to the pool
