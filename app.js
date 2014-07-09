@@ -192,7 +192,7 @@ app.get(redirRoute, function(req, res) {
 					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret, pubkey];
 				}
 				
-				console.log('insertstmt: ' + insertstmt + '; insertarray: ' + JSON.stringify(insertarray));
+				//console.log('insertstmt: ' + insertstmt + '; insertarray: ' + JSON.stringify(insertarray));
 				
 				client.query(insertstmt, insertarray, 
 					function(err, result) {
@@ -258,7 +258,8 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 			selectstmt = pgcryptoselect;
 			selectarray = [tOrgId, privkey];
 		}
-	
+		console.log('selectstmt: ' + selectstmt + '; selectarray: ' + JSON.stringify(selectarray));
+		
 		pg.connect(pgConnectionString, function(err, client, done) {
 			if (err) {
 				console.log('Attempting to check or refresh authentication. Unable to connect to postgres db. ' + JSON.stringify(err));
@@ -268,7 +269,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 				function(err, result) {
 					done(); // release client back to the pool
 					if (err) {
-						return callback('Unable to retrieve registered device info from postgres db. - ' + err);
+						return callback('Unable to retrieve org authentication infromation from postgres db. - ' + JSON.stringify(err));
 					}
 					if (result.rows.length < 1) {
 						return callback('unregistered org or previous authentication failed to store oauth record in postgres');
