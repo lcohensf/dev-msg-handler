@@ -57,10 +57,11 @@ if (runlocal == true) {
 	privkey = process.env.PRIVKey || '';
 }
 
-var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token, '
-				+ 'pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret '
-				+ 'FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret) '
-				+ 'CROSS JOIN (SELECT dearmor($5) as pubkey) as keys';
+var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token", "client_id", "client_secret") '
+	+ 'SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token, '
+	+ 'pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret '
+	+ 'FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret) '
+	+ 'CROSS JOIN (SELECT dearmor($5) as pubkey) as keys';
 				
 var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token, client_id, client_secret) VALUES ($1, $2, $3, $4)';
 
