@@ -57,7 +57,19 @@ if (runlocal == true) {
 	privkey = process.env.PRIVKey || '';
 }
 
+var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token, '
+				+ 'pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret '
+				+ 'FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret) '
+				+ 'CROSS JOIN (SELECT dearmor($5) as pubkey) as keys';
+				
+var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token, client_id, client_secret) VALUES ($1, $2, $3, $4)';
 
+var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt '
+		+ 'pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt '
+		+ 'FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
+		
+var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token, client_id, client_secret FROM "Qualcomm".oauth where org_id = $1';
+		
 // create the server
 var app = module.exports = express.createServer();
 
@@ -167,30 +179,19 @@ app.get(redirRoute, function(req, res) {
 					debugMsg(res, "error", {title: 'Unable to clear any existing oauth records in postgres db for org: ' + orgid, data: err});
 					return;
 				}
-				/*
-				INSERT INTO "Qualcomm".oauth("org_id", "refresh_token", "client_id", "client_secret")
-				SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token,
-				pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret
-				FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret)
-				CROSS JOIN (SELECT dearmor($5) as pubkey) as keys
-				*/	
 
-				var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token, '
-				+ 'pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret '
-				+ 'FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret) '
-				+ 'CROSS JOIN (SELECT dearmor($5) as pubkey) as keys';
-				
-				var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token, client_id, client_secret) VALUES ($1, $2, $3, $4)';
-				var insertstmt = pgcryptoinsert;
-				var insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret, pubkey];
+				var insertstmt;
+				var insertarray;
 				
 				if (runlocal == true) {
 					insertstmt = noncryptoinsert;
 					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret];
+				} else {
+					insertstmt = pgcryptoinsert;
+					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret, pubkey];
 				}
 				
-				console.log('insertstmt: ' + insertstmt);
-				console.log('insertarray: ' + JSON.stringify(insertarray));
+				console.log('insertstmt: ' + insertstmt + '; insertarray: ' + JSON.stringify(insertarray));
 				
 				client.query(insertstmt, insertarray, 
 					function(err, result) {
@@ -245,25 +246,16 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	}
 	else {
 	
-		/*
-		SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt,
-		pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt
-		FROM "Qualcomm".oauth 
-		CROSS JOIN (SELECT dearmor($2) as privkey) as keys
-		where oauth.org_id = $1
-		*/	
 
-		var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt '
-		+ 'pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt '
-		+ 'FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
-		
-		var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token, client_id, client_secret FROM "Qualcomm".oauth where org_id = $1';
-		var selectstmt = pgcryptoselect;
-		var selectarray = [tOrgId, privkey];
+		var selectstmt;
+		var selectarray;
 
 		if (runlocal == true) {
 			selectstmt = noncryptoselect;
 			selectarray = [tOrgId];
+		} else {
+			selectstmt = pgcryptoselect;
+			selectarray = [tOrgId, privkey];
 		}
 	
 		pg.connect(pgConnectionString, function(err, client, done) {
