@@ -35,10 +35,13 @@ var pgConnectionString = process.env.DATABASE_URL || '';
 var port = process.env.PORT || 3001; 
 var redirRoute = '/oauth/_callback';
 var redir = process.env.REDIRECT_URI || ('http://localhost:3001' + redirRoute);
-//  testingOrgId only for simplifying testing to prepopulate form field
+//  testingxxx variables used only for simplifying testing to prepopulate form field
 var testingOrgId = process.env.CLIENT_ORG_ID || '';
-var connectedAppClientId = process.env.CLIENT_ID || '';
-var connectedAppClientSecret = process.env.CLIENT_SECRET || '';
+var testingClientId = process.env.CLIENT_ID || '';
+var testingClientSecret = process.env.CLIENT_SECRET || '';
+// cannot package a connected app in an unmanaged package, so we cannot hold a single connected app ID and secret in env variables
+//var connectedAppClientId = process.env.CLIENT_ID || '';
+//var connectedAppClientSecret = process.env.CLIENT_SECRET || '';
 var runlocal = redir.search('localhost') != -1;
 var qcEndpoint = process.env.QCEndpoint || '';
 var qcKey = process.env.QCKey || '';
@@ -100,21 +103,21 @@ app.get('/authOrg', function(req, res) {
 		{ title: 'Enter Salesforce Authentication Information', 
 		  defaults: {
 		  	orgId: testingOrgId,
+		  	clientId: testingClientId,
+		  	clientSecret: testingClientSecret
 		  }
 		} );
 });
 
+
+
 function initSFOrgConnection(orgid) {
-	oauth[orgid] = {
-		// will build up  fields as we create connection and authenticate
-	};
-	
 	
 	// use the nforce package to create a connection to salesforce.com
 
 	oauth[orgid].connection = nforce.createConnection({
-	  clientId: connectedAppClientId,
-	  clientSecret: connectedAppClientSecret,
+	  clientId: oauth[orgid].client_key,
+	  clientSecret: oauth[orgid].client_secret,
 	  clientOrgId: orgid,
 	  redirectUri: redir,
 	  mode: 'multi', // todo: support authentication to multiple orgs
@@ -129,6 +132,10 @@ function initSFOrgConnection(orgid) {
 
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
+	oauth[req.body.org_id] = {
+		client_key: req.body.client_key,
+		client_secret: req.body.client_secret
+	};
 	initSFOrgConnection(req.body.org_id);
 	
 	res.redirect(oauth[req.body.org_id].redirectURL);
@@ -161,20 +168,24 @@ app.get(redirRoute, function(req, res) {
 					return;
 				}
 				/*
-				INSERT INTO "Qualcomm".oauth("org_id", "refresh_token")
-				SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token
-				FROM (VALUES ($1, $2)) as vals(org_id, refresh_token)
-				CROSS JOIN (SELECT dearmor($3) as pubkey) as keys
+				INSERT INTO "Qualcomm".oauth("org_id", "refresh_token", "client_id", "client_secret")
+				SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token,
+				pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret
+				FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret)
+				CROSS JOIN (SELECT dearmor($5) as pubkey) as keys
 				*/	
 
-				var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token FROM (VALUES ($1, $2)) as vals(org_id, refresh_token) CROSS JOIN (SELECT dearmor($3) as pubkey) as keys';
-				var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token) VALUES ($1, $2)';
+				var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token") SELECT vals.org_id, pgp_pub_encrypt(vals.refresh_token, keys.pubkey) as refresh_token, '
+				+ 'pgp_pub_encrypt(vals.client_id, keys.pubkey) as client_id, pgp_pub_encrypt(vals.client_secret, keys.pubkey) as client_secret '
+				+ 'FROM (VALUES ($1, $2, $3, $4)) as vals(org_id, refresh_token, client_id, client_secret) CROSS JOIN (SELECT dearmor($5) as pubkey) as keys';
+				
+				var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token, client_id, client_secret) VALUES ($1, $2, $3, $4)';
 				var insertstmt = pgcryptoinsert;
-				var insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, pubkey];
-
+				var insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret, pubkey];
+				
 				if (runlocal == true) {
 					insertstmt = noncryptoinsert;
-					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token];
+					insertarray = [orgid, oauth[orgid].oauthObj.refresh_token, oauth[orgid].client_key, oauth[orgid].client_secret];
 				}
 				
 				client.query(insertstmt, insertarray, 
@@ -231,14 +242,18 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 	else {
 	
 		/*
-		SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt
+		SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt,
+		pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt
 		FROM "Qualcomm".oauth 
 		CROSS JOIN (SELECT dearmor($2) as privkey) as keys
 		where oauth.org_id = $1
 		*/	
 
-		var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
-		var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token FROM "Qualcomm".oauth where org_id = $1';
+		var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt '
+		+ 'pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt '
+		+ 'FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
+		
+		var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token, client_id, client_secret FROM "Qualcomm".oauth where org_id = $1';
 		var selectstmt = pgcryptoselect;
 		var selectarray = [tOrgId, privkey];
 
@@ -263,16 +278,25 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 					}		
 
 					console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
-					
 
-
-
-					initSFOrgConnection(result.rows[0].org_id, connectedAppClientId, connectedAppClientSecret);
 					if (runlocal == true) {
-						oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token};	
+						oauth[tOrgId] = {
+							oauthObj: {refresh_token: result.rows[0].refresh_token},	
+							client_key: result.rows[0].client_id,
+							client_secret:  result.rows[0].client_secret
+						};
+
 					} else {
-						oauth[tOrgId].oauthObj = {refresh_token: result.rows[0].refresh_token_decrypt};	
+						oauth[tOrgId] = {
+							oauthObj: {refresh_token: result.rows[0].refresh_token_decrypt},	
+							client_key: result.rows[0].client_id_decrypt,
+							client_secret: result.rows[0].client_secret_decrypt
+						};
 					}
+
+
+					initSFOrgConnection(result.rows[0].org_id);
+
 					
 					
 					oauth[tOrgId].connection.refreshToken({oauth: oauth[tOrgId].oauthObj}, function(err, resp) {
