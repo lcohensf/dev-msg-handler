@@ -65,7 +65,7 @@ var pgcryptoinsert = 'INSERT INTO "Qualcomm".oauth("org_id", "refresh_token", "c
 				
 var noncryptoinsert = 	'INSERT INTO "Qualcomm".oauth (org_id, refresh_token, client_id, client_secret) VALUES ($1, $2, $3, $4)';
 
-var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt '
+var pgcryptoselect = 'SELECT oauth.org_id, pgp_pub_decrypt(oauth.refresh_token, keys.privkey) as refresh_token_decrypt, '
 		+ 'pgp_pub_decrypt(oauth.client_id, keys.privkey) as client_id_decrypt, pgp_pub_decrypt(oauth.client_secret, keys.privkey) as client_secret_decrypt '
 		+ 'FROM "Qualcomm".oauth CROSS JOIN (SELECT dearmor($2) as privkey) as keys where oauth.org_id = $1';
 		
