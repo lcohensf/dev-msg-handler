@@ -9,6 +9,7 @@ var express = require('express')
   , jwt = require('jwt-simple');
 
 
+
 var oauth = []; // array of authentication objects, one per SF org, indexed by org id
 /*
 	Fields in oauth objects array
@@ -17,6 +18,8 @@ var oauth = []; // array of authentication objects, one per SF org, indexed by o
 		connection: '', //  returned by nforce.createConnection()
 		redirectURL: '', // built up as part of creating connection to Salesforce
 		oauthObj: '', // response from authentication flow, only care about refresh_token field	
+		client_key: '', // SF org specific connected app key
+		client_secret: '' // SF org specific connected app secret
 	};
 */
 
@@ -74,6 +77,8 @@ var noncryptoselect = 	'SELECT oauth.org_id, oauth.refresh_token, client_id, cli
 // create the server
 var app = module.exports = express.createServer();
 
+
+
 // Configuration
 app.configure(function(){
   app.set('views', __dirname + '/views');
@@ -93,6 +98,15 @@ app.configure('production', function(){
 });
 
 // Routes
+
+// global controller
+app.get('/*',function(req,res,next){
+	res.header('X-Frame-Options', 'Deny');
+    res.header('Cache-control' , 'no-store' );
+    res.header('Pragma' , 'no-cache' );
+    next();
+});
+
 app.get('/', function(req, res){
 	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
     	console.log("Caught / over http. Redirecting to: " + "https://" + req.headers.host + req.url);
@@ -111,13 +125,24 @@ app.get('/authOrg', function(req, res) {
     	res.redirect("https://" + req.headers.host + req.url);
     	return;
 	}
+
+	var defaultOrgID = '';
+	var defaultClientId = '';
+	var defaultClientSecret = '';
+	
+	// check for debugUI flag and only show default values in UI if debug
+	if (debugUI == 'true') {
+		defaultOrgID = testingOrgId;
+		defaultClientId = testingClientId;
+		defaultClientSecret = testingClientSecret;
+	} 
 	
 	res.render("authOrg", 
 		{ title: 'Enter Salesforce Authentication Information', 
 		  defaults: {
-		  	orgId: testingOrgId,
-		  	clientId: testingClientId,
-		  	clientSecret: testingClientSecret
+		  	orgId: defaultOrgID,
+		  	clientId: defaultClientId,
+		  	clientSecret: defaultClientSecret
 		  }
 		} );
 });
@@ -145,6 +170,14 @@ function initSFOrgConnection(orgid) {
 
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
+	
+	if ((req.body.org_id == 'undefined') || (req.body.client_key == 'undefined') || (req.body.client_secret == 'undefined')) {
+		console.log('Handling /authenticate. Request body does not include required fields. Body: ' + JSON.stringify(req.body));
+		res.send(400, {status:400, message: 'Incorrect format.'});
+		res.end();
+		 return;
+	}
+	
 	oauth[req.body.org_id] = {
 		client_key: req.body.client_key,
 		client_secret: req.body.client_secret
@@ -152,6 +185,11 @@ app.post('/authenticate', function(req, res) {
 	initSFOrgConnection(req.body.org_id);
 	
 	res.redirect(oauth[req.body.org_id].redirectURL);
+});
+
+app.get('/authenticate', function(req, res) {
+	res.send(404, {status:404, message: 'GET not supported.'});
+	res.end();
 });
 
 app.get(redirRoute, function(req, res) {
