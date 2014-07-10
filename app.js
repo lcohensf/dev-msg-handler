@@ -324,7 +324,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 			selectstmt = pgcryptoselect;
 			selectarray = [tOrgId, privkey];
 		}
-		console.log('selectstmt: ' + selectstmt + '; selectarray: ' + JSON.stringify(selectarray));
+		//console.log('selectstmt: ' + selectstmt + '; selectarray: ' + JSON.stringify(selectarray));
 		
 		pg.connect(pgConnectionString, function(err, client, done) {
 			if (err) {
