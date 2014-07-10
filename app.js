@@ -171,7 +171,7 @@ function initSFOrgConnection(orgid) {
 // will do lazy authentication as notification messages come from qualcomm or user authenticates via UI
 app.post('/authenticate', function(req, res) {
 	
-	if ((req.body.org_id == 'undefined') || (req.body.client_key == 'undefined') || (req.body.client_secret == 'undefined')) {
+	if ((typeof req.body.org_id == 'undefined') || (typeof req.body.client_key == 'undefined') || (typeof req.body.client_secret == 'undefined')) {
 		console.log('Handling /authenticate. Request body does not include required fields. Body: ' + JSON.stringify(req.body));
 		res.send(400, {status:400, message: 'Incorrect format.'});
 		res.end();
@@ -363,6 +363,13 @@ app.post('/register', function(req, res) {
     	return;
 	}
 	
+	if ((typeof req.body.sf_user_id == 'undefined') || (typeof req.body.sf_org_id == 'undefined') || (typeof req.body.jwt_token == 'undefined')) {
+		console.log('Handling /register. Request body does not include required fields. Body: ' + JSON.stringify(req.body));
+		res.send(400, {status:400, message: 'Incorrect format.'});
+		res.end();
+		 return;
+	}
+	
 	var dev = {
 		sf_user_id: req.body.sf_user_id || '',		
 		sf_org_id: req.body.sf_org_id || '',
@@ -418,6 +425,10 @@ app.post('/register', function(req, res) {
   res.send(200, {status:200, message: 'Device registration successful', dev: JSON.stringify(dev)});
 });
 
+app.get('/register', function(req, res) {
+	res.send(404, {status:404, message: 'GET not supported.'});
+	res.end();
+});
 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
