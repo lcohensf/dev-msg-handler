@@ -232,6 +232,7 @@ app.get(redirRoute, function(req, res) {
 	console.log('in redirRoute, req.query: ' + JSON.stringify(req.query));
 	if(!req.query.code) {
 		console.log('Error receiving authorization from Salesforce');
+		res.send(500, {status:500, message: 'Internal error.'});
 		res.end();
 	}
 	res.header('Content-Type', 'text/html; charset=utf-8'); // specifying charset to avoid potential Cross-site scripting vulnerability
@@ -247,13 +248,17 @@ app.get(redirRoute, function(req, res) {
 		// store authentication info to postgres
 		pg.connect(pgConnectionString, function(err, client, done) {
 			if (err) {
-				debugMsg(res, "error", {title: 'Unable to connect to postgres db.', data: err});
+				console.log('Unable to connect to postgres db. err: ' + JSON.stringify(err));
+				res.send(500, {status:500, message: 'Internal error.'});
+				res.end();
 				return;
 			}
 			// delete old record for org and then insert 
 			client.query('DELETE FROM "Qualcomm".oauth WHERE org_id=$1', [orgid], function(err) { 
 				if (err) {
-					debugMsg(res, "error", {title: 'Unable to clear any existing oauth records in postgres db for org: ' + orgid, data: err});
+					console.log('Unable to clear any existing oauth records in postgres db for org: ' + orgid + ' err: ' + JSON.stringify(err));
+					res.send(500, {status:500, message: 'Internal error.'});
+					res.end();
 					return;
 				}
 
@@ -274,14 +279,16 @@ app.get(redirRoute, function(req, res) {
 					function(err, result) {
 						done(); // release client back to the pool
 						if (err) {
-							debugMsg(res, "error", {title: 'Unable to insert to postgres db.', data: JSON.stringify(err)});
+							console.log('Unable to insert to postgres db. err: ' + JSON.stringify(err));
+							res.send(500, {status:500, message: 'Internal error.'});
+							res.end();
 							return;
 						}
 						//upsert jwtToken to SF org
 						upsertJWTToken(jwt.encode({orgid: orgid}, jwtSecret), orgid, function(err) {
 							if (err) {
 							  console.log('Error inserting JWT token to SF org: ' + JSON.stringify(err));
-							  res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+							  res.send(500, {status:500, message: 'Internal error.'});
 							  res.end();
 							  return;
 							} else {
@@ -300,7 +307,7 @@ app.get(redirRoute, function(req, res) {
 
 		
 	  } else {
-		debugMsg(res, "error", {title: 'Unable to authenticate.', data: err});
+		console.log('Unable to authenticate. err: ' + JSON.stringify(err));
 		return;
 	  }
 	});
@@ -419,7 +426,7 @@ app.post('/register', function(req, res) {
 	console.log('decoded = ' + decoded.orgid + '  sf_org_id = ' + dev.sf_org_id);
 	if (decoded.orgid != dev.sf_org_id) {
 		//res.render('unauthorized', { title: 'Unauthorized for registration of devices. Invalid JWT token.' });
-		res.send(500, {status:500, message: 'Unauthorized for registration of devices. Invalid JWT token.', type:'internal'});
+		res.send(500, {status:500, message: 'Invalid request'});
 		return;
 	}
 
@@ -428,7 +435,7 @@ app.post('/register', function(req, res) {
 		if (err) {
 			
 			console.log('Error connecting to postgres db: ' + JSON.stringify(err));	
-			res.send(500, {status:500, message: 'Unable to connect to postgres db.', type:'internal'});
+			res.send(500, {status:500, message: 'Internal error.'});
 			return;
 		}
 		
@@ -447,8 +454,7 @@ app.post('/register', function(req, res) {
 						} else {
 						
 						console.log('Error inserting device: ' + JSON.stringify(err));	
-						res.send(500, {status:500, message: 'Unable to insert device to postgres db.', type:'internal'});
-						//debugMsg(res, "error", {title: 'Error inserting.', data: JSON.stringify(err)});
+						res.send(500, {status:500, message: 'Internal error.'});
 						return;
 						}
 					} else {
@@ -460,7 +466,7 @@ app.post('/register', function(req, res) {
 	});		
 
 
-  res.send(200, {status:200, message: 'Device registration successful', dev: JSON.stringify(dev)});
+  res.send(200, {status:200, message: 'Success.'});
 });
 
 app.get('/register', function(req, res) {
@@ -664,7 +670,7 @@ app.get('/Notification', function(req, res) {
   pg.connect(pgConnectionString, function(err, client, done) {
 	if (err) {
 		console.log('Handling /Notification, unable to connect to postgres db. ' + JSON.stringify(err));
-		res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+		res.send(500, {status:500, message: 'Internal error.'});
 		return;
 	}
 	client.query('SELECT devices.sf_org_id FROM "Qualcomm".devices WHERE devices.sf_user_id = $1',
@@ -672,7 +678,7 @@ app.get('/Notification', function(req, res) {
 		function(err, result) {
 			if (err) {
 				console.log('Handling /Notification, unable to retrieve registered device info from postgres db.' + JSON.stringify(err));
-				res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+				res.send(500, {status:500, message: 'Internal error.'});
 				return;
 			}
 			if (result.rows.length < 1) {
@@ -697,21 +703,21 @@ app.get('/Notification', function(req, res) {
 					done(); // release client back to the pool
 					if (err) {
 						console.log('Handling /Notification, unable to insert notification to postgres db. ' + JSON.stringify(err));
-						res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+						res.send(500, {status:500, message: 'Internal error.'});
 						return;
 					} else {
 						notification.id = result.rows[0].id;	
 						console.log('new notification id: ' + notification.id);	
 						
 						if (insertMeasureFlag == false) {
-							res.send(200, {status:200, message: 'Logged notification for unknown user.'});
+							res.send(200, {status:200, message: 'Success.'});
 							return;
 						} else {														
 							// check that we are authenticated with this SF org, and if not authenticate with stored token
 							checkOrRefreshAuthentication(false, notification.sf_org_id, function(err) {
 								if (err) {
 									console.log('Handling /Notification, no connection to SF org. Notification processing halted. '+ JSON.stringify(err));
-									res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+									res.send(500, {status:500, message: 'Internal error.'});
 									return;
 								}				
 		
@@ -757,7 +763,7 @@ app.get('/Notification', function(req, res) {
 									function callback(error, response, body) {
 										if (error || response.statusCode != 200) {
 											console.log('Handling /Notification, error from Qualcomm on ' + notification.category + ' request. ' +JSON.stringify(error));
-											res.send(500, {status:500, message: 'Internal error.', type:'internal'});
+											res.send(500, {status:500, message: 'Internal error.'});
 											return;
 										}
 										else {
@@ -770,7 +776,7 @@ app.get('/Notification', function(req, res) {
 											// kick off inserts, running asynchronously and return ok
 											insertMeasures(notification.category, notification.sf_org_id, notification.sf_user_id, notification.trackGuid, notification.id, aMeasureResponse);
 											console.log('Inserts of measurements to SF org proceeding for notification id: ' + notification.id);
-											res.send(200, {status:200, message: 'Inserts completed or progressing successfully.'});
+											res.send(200, {status:200, message: 'Success.'});
 											return;
 
 										}
@@ -783,7 +789,7 @@ app.get('/Notification', function(req, res) {
 										debugMsg(res, "error", {title: 'Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category});
 									} else {
 										console.log ('Unknown category. Notification id: ' + notification.id + ' Category: ' + notification.category);
-										res.send(500, {status:500, message: 'Unknown notification category.'});
+										res.send(500, {status:500, message: 'Incorrect format.'});
 										return;
 									}
 								}
