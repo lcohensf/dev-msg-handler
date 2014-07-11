@@ -234,6 +234,8 @@ app.get(redirRoute, function(req, res) {
 		console.log('Error receiving authorization from Salesforce');
 		res.end();
 	}
+	res.header('Content-Type', 'text/html; charset=utf-8'); // specifying charset to avoid potential Cross-site scripting vulnerability
+	
 	var orgid = req.query.state;
 
 	oauth[orgid].connection.authenticate({ code: req.query.code}, function(err, resp){
