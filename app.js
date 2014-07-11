@@ -127,8 +127,16 @@ app.configure('production', function(){
 
 // Routes
 
-// global controller
+// global get controller
 app.get('/*',function(req,res,next){
+	res.header('X-Frame-Options', 'Deny');
+    res.header('Cache-control' , 'no-store' );
+    res.header('Pragma' , 'no-cache' );
+    next();
+});
+
+// global post controller
+app.post('/*',function(req,res,next){
 	res.header('X-Frame-Options', 'Deny');
     res.header('Cache-control' , 'no-store' );
     res.header('Pragma' , 'no-cache' );
