@@ -1,0 +1,55 @@
+CREATE SCHEMA "Qualcomm";
+
+CREATE SEQUENCE "Qualcomm".notification_sequence
+  INCREMENT 1
+  MINVALUE 1
+  MAXVALUE 9223372036854775807
+  START 12017
+  CACHE 1;
+  
+CREATE SEQUENCE "Qualcomm".oauth_id_seq
+  INCREMENT 1
+  MINVALUE 1
+  MAXVALUE 9223372036854775807
+  START 29
+  CACHE 1;
+  
+  
+CREATE TABLE "Qualcomm".devices
+(
+  sf_org_id text NOT NULL,
+  sf_user_id text NOT NULL,
+  CONSTRAINT "DevicesPrimaryKey" PRIMARY KEY (sf_org_id, sf_user_id)
+)
+WITH (
+  OIDS=FALSE
+);
+
+CREATE TABLE "Qualcomm".notifications
+(
+  "trackGuid" text,
+  "trackName" text,
+  category text,
+  "startDate" text,
+  "endDate" text,
+  sf_org_id text,
+  url text,
+  id integer NOT NULL DEFAULT nextval('"Qualcomm".notification_sequence'::regclass),
+  sf_user_id text,
+  CONSTRAINT id_key PRIMARY KEY (id)
+)
+WITH (
+  OIDS=FALSE
+);
+
+CREATE TABLE "Qualcomm".oauth
+(
+  org_id text NOT NULL,
+  id serial NOT NULL,
+  refresh_token bytea,
+  client_id bytea,
+  client_secret bytea
+)
+WITH (
+  OIDS=FALSE
+);
