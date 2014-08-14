@@ -9,8 +9,14 @@ See document "2Net Fitness app setup.pdf" for one time setup instructions of the
 to obtain the Qualcomm 2net API key and secret pair required for both the 
 Force.com app setup and this heroku node.js app setup.
 
+
+
+To install the Force.com 2Net Fitness app:
+1. Sign up for a free Salesforce.com Developer Environment at https://developer.salesforce.com/
+2. Download and install the app from the Salesforce.com AppExchange listing here: https://appexchange.salesforce.com/listingDetail?listingId=a0N3000000B5WyfEAF
+
 This heroku app is designed to support multiple Salesforce.com orgs running the 2Net Fitness app. Follow the instructions in
-"2Net Fitness app setup.pdf" for each instance of the 2Net Fitness Force.com app. 
+"2Net Fitness app setup.pdf" for each instance of the 2Net Fitness Force.com app that you setup.
 
 ### Deploying to Heroku
 
@@ -46,10 +52,6 @@ approximately 20 letters and characters.)
 Push the app to heroku:
 >git push heroku master
 
-
-### Demo on Heroku
-
-This application is running on heroku at: http://dev2netlab.herokuapp.com or https://dev2netlab.herokuapp.com
 
 ### Optional worker process
 
