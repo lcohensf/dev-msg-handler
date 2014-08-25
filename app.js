@@ -178,10 +178,11 @@ app.get('/testrest', function(req,res) {
 			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
-					return callback('Error calling REST service: ' + err);
+					res.send(500, {status:500, message: 'Internal error.'});
+					res.end();
 				} else {
-					console.log('In response from SetKeys: ' + JSON.stringify(resp));
-					return callback(null);
+					res.send(200, {status:200, message: 'Ok'});
+					res.end();
 				} 
 			});
 		}
