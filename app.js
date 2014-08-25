@@ -175,7 +175,7 @@ app.get('/testrest', function(req,res) {
 
 		} else {
 
-			oauth[orgid].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
+			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
 					return callback('Error calling REST service: ' + err);
