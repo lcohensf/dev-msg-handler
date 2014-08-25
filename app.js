@@ -154,6 +154,41 @@ app.get('/', function(req, res){
 	res.render('index', { title: 'Salesforce - Qualcomm Device Message Handler' });
 
 });
+/*
+Connection.prototype.apexRest = function(data, callback) {
+  // need to specify resource
+  var opts = this._getOpts(data, callback);
+  opts.uri = opts.oauth.instance_url + '/services/apexrest/' + data.uri;
+  opts.method = opts.method || 'GET';
+  if(opts.urlParams) {
+    opts.qs = opts.urlParams;
+  }
+  return this._apiRequest(opts, opts.callback);
+}
+*/
+
+app.get('/testrest', function(req,res) {
+	var testOrgId = '00Do0000000HrIq';
+	checkOrRefreshAuthentication(false, testOrgId, function(err) {
+		if (err) {
+			return callback('Error checking or refreshing authentication in testrest: ' + err);
+
+		} else {
+
+			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
+				if (err) {
+					console.log('Error calling REST service: ' + JSON.stringify(err));
+					return callback('Error calling REST service: ' + err);
+				} else {
+					console.log('In response from SetKeys: ' + JSON.stringify(resp));
+					return callback(null);
+				} 
+			});
+		}
+		
+	}); 
+});
+
 
 app.get('/authOrg', function(req, res) {
 	if(req.headers['x-forwarded-proto'] && req.headers['x-forwarded-proto'] === "http") {
