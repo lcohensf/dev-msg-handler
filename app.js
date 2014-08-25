@@ -175,7 +175,7 @@ app.get('/testrest', function(req,res) {
 
 		} else {
 
-			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
+			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys', urlParams: 'jwt=12345'}, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
 					res.send(500, {status:500, message: 'Internal error.'});
