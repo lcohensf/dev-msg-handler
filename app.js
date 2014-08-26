@@ -513,7 +513,7 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 			var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
 				'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
 				
-			console.log('URIPath=' + uriPath);
+			//console.log('URIPath=' + uriPath);
 
 			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: uriPath}, function(err, resp){
 				if (err) {
@@ -529,6 +529,7 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 	}); 	
 
 }
+
 /* original version when app was storing tokens and keys in encrypted fields on force.com 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
@@ -632,7 +633,7 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 				Debug_Measurement__c: debugMeasurementText
 			};	
 		}
-		objs[i] = nforce.createSObject('Measurement__c', sfMeasures[i]);
+		objs[i] = nforce.createSObject('twonetfiness__.Measurement__c', sfMeasures[i]);
 	}
 	
 /*
