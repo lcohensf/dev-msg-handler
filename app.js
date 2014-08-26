@@ -503,6 +503,8 @@ app.get('/testrest', function(req,res) {
 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
+
+	console.log('*** in upsertJWTToken');
 	checkOrRefreshAuthentication(false, orgid, function(err) {
 		if (err) {
 			return callback('Error checking or refreshing authentication in upsertJWTToken: ' + err);
