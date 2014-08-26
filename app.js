@@ -478,16 +478,22 @@ app.get('/register', function(req, res) {
 
 app.get('/testrest', function(req,res) {
 	var testOrgId = '00Do0000000HrIq'; 
+	
+	 
 	checkOrRefreshAuthentication(false, testOrgId, function(err) {
 		if (err) {
 			return callback('Error checking or refreshing authentication in testrest: ' + err);
 
 		} else {
+			var restBody = {
+				jwt: '1234'
+			};
+			
 			var restOpts = {
 			oauth: oauth[testOrgId].oauthObj, 
 			uri: 'twonetfitness/SetKeys',
 			method: 'POST',
-			body: "{jwt: '12345'}"
+			body: JSON.stringify(restBody)
 			};
 
 			oauth[testOrgId].connection.apexRest(restOpts, function(err, resp){
