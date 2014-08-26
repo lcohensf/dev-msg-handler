@@ -512,6 +512,8 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 		} else {
 			var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
 				'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
+				
+			console.log('URIPath=' + uriPath);
 
 			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: uriPath}, function(err, resp){
 				if (err) {
