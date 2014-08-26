@@ -475,7 +475,7 @@ app.get('/register', function(req, res) {
 	res.end();
 });
 
-/*
+
 app.get('/testrest', function(req,res) {
 	var testOrgId = '00Do0000000HrIq'; 
 	checkOrRefreshAuthentication(false, testOrgId, function(err) {
@@ -483,8 +483,16 @@ app.get('/testrest', function(req,res) {
 			return callback('Error checking or refreshing authentication in testrest: ' + err);
 
 		} else {
+			var restOpts = {
+			oauth: oauth[testOrgId].oauthObj, 
+			uri: 'twonetfitness/SetKeys',
+			method: 'POST',
+			body: {
+				jwt: '12345'
+			}
+			};
 
-			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'twonetfitness/SetKeys?jwt=12345'}, function(err, resp){
+			oauth[testOrgId].connection.apexRest(restOpts, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
 					res.send(500, {status:500, message: 'Internal error.'});
@@ -499,7 +507,7 @@ app.get('/testrest', function(req,res) {
 		
 	}); 
 });
-*/
+
 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
