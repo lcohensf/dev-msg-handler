@@ -522,10 +522,6 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 			return callback('Error checking or refreshing authentication in upsertJWTToken: ' + err);
 
 		} else {
-			//var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
-			//	'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
-				
-			//console.log('URIPath=' + uriPath);
 			
 			//{"TwoNetKey" : "a key", "TwoNetSecret" : "a secret", "JWTToken" : "a token", "OrgId" : "123"}
 			
