@@ -181,6 +181,7 @@ app.get('/testrest', function(req,res) {
 					res.send(500, {status:500, message: 'Internal error.'});
 					res.end();
 				} else {
+					console.log('Response from calling SetKeys: ' + JSON.stringify(resp));
 					res.send(200, {status:200, message: 'Ok'});
 					res.end();
 				} 
