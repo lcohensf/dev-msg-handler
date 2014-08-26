@@ -598,8 +598,8 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 				twonetfitness__Pulse__c: aMR.blood.pulse,
 				twonetfitness__systolic__c: aMR.blood.systolic,
 				twonetfitness__spo2__c: aMR.blood.spo2,
-				twonetfitness__Device__r : { GUID__c: trackGuid }, 
-				twonetfitness__Health__r : { GUID__c: sf_user_id}, 
+				twonetfitness__Device__r : { twonetfitness__GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { twonetfitness__GUID__c: sf_user_id}, 
 				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
 				twonetfitness__Debug_Measurement__c: debugMeasurementText				
 			};
@@ -614,8 +614,8 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 				twonetfitness__Distance__c: aAR.distance,
 				twonetfitness__Calories__c: aAR.calories,
 				twonetfitness__Duration__c: aAR.duration,
-				twonetfitness__Device__r : { GUID__c: trackGuid }, 
-				twonetfitness__Health__r : { GUID__c: sf_user_id},
+				twonetfitness__Device__r : { twonetfitness__GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { twonetfitness__GUID__c: sf_user_id},
 				twonetfitness__type__c: aAR.type,
 				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
 				twonetfitness__Debug_Measurement__c: debugMeasurementText		
@@ -627,8 +627,8 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 			sfMeasures[i] = {
 				twonetfitness__Date_Time__c: aMR.time * 1000,
 				twonetfitness__weight__c: aMR.body.weight,
-				twonetfitness__Device__r : { GUID__c: trackGuid }, 
-				twonetfitness__Health__r : { GUID__c: sf_user_id},
+				twonetfitness__Device__r : { twonetfitness__GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { twonetfitness__GUID__c: sf_user_id},
 				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
 				twonetfitness__Debug_Measurement__c: debugMeasurementText
 			};	
