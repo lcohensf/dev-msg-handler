@@ -591,46 +591,46 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 		if (category == 'blood') {
 			var aMR = aMeasureResponse.measureResponse.measures.measure[i];
 			sfMeasures[i] = {
-				Date_Time__c: aMR.time * 1000,
-				glucose__c: aMR.blood.glucose,
-				diastolic__c: aMR.blood.diastolic,
-				map__c: aMR.blood.map,
-				Pulse__c: aMR.blood.pulse,
-				systolic__c: aMR.blood.systolic,
-				spo2__c: aMR.blood.spo2,
-				Device__r : { GUID__c: trackGuid }, 
-				Health__r : { GUID__c: sf_user_id}, 
-				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
-				Debug_Measurement__c: debugMeasurementText				
+				twonetfitness__Date_Time__c: aMR.time * 1000,
+				twonetfitness__glucose__c: aMR.blood.glucose,
+				twonetfitness__diastolic__c: aMR.blood.diastolic,
+				twonetfitness__map__c: aMR.blood.map,
+				twonetfitness__Pulse__c: aMR.blood.pulse,
+				twonetfitness__systolic__c: aMR.blood.systolic,
+				twonetfitness__spo2__c: aMR.blood.spo2,
+				twonetfitness__Device__r : { GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { GUID__c: sf_user_id}, 
+				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
+				twonetfitness__Debug_Measurement__c: debugMeasurementText				
 			};
 		}
 		else if (category == 'activity') {	
 			var aAR = aMeasureResponse.activityResponse.activities.activity[i];
 			sfMeasures[i] = {
-				Date_Time__c: aAR.endTime * 1000,
-				Start_Time__c: aAR.startTime * 1000,
-				Steps__c: aAR.steps,
-				Mets__c: aAR.mets,
-				Distance__c: aAR.distance,
-				Calories__c: aAR.calories,
-				Duration__c: aAR.duration,
-				Device__r : { GUID__c: trackGuid }, 
-				Health__r : { GUID__c: sf_user_id},
-				type__c: aAR.type,
-				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
-				Debug_Measurement__c: debugMeasurementText		
+				twonetfitness__Date_Time__c: aAR.endTime * 1000,
+				twonetfitness__Start_Time__c: aAR.startTime * 1000,
+				twonetfitness__Steps__c: aAR.steps,
+				twonetfitness__Mets__c: aAR.mets,
+				twonetfitness__Distance__c: aAR.distance,
+				twonetfitness__Calories__c: aAR.calories,
+				twonetfitness__Duration__c: aAR.duration,
+				twonetfitness__Device__r : { GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { GUID__c: sf_user_id},
+				twonetfitness__type__c: aAR.type,
+				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aAR.startTime+':'+aAR.endTime+ ':'+notificationId,
+				twonetfitness__Debug_Measurement__c: debugMeasurementText		
 			};
 
 		}
 		else if (category == 'body') {
 			var aMR = aMeasureResponse.measureResponse.measures.measure[i];
 			sfMeasures[i] = {
-				Date_Time__c: aMR.time * 1000,
-				weight__c: aMR.body.weight,
-				Device__r : { GUID__c: trackGuid }, 
-				Health__r : { GUID__c: sf_user_id},
-				Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
-				Debug_Measurement__c: debugMeasurementText
+				twonetfitness__Date_Time__c: aMR.time * 1000,
+				twonetfitness__weight__c: aMR.body.weight,
+				twonetfitness__Device__r : { GUID__c: trackGuid }, 
+				twonetfitness__Health__r : { GUID__c: sf_user_id},
+				twonetfitness__Unique_Key__c: sf_user_id+':'+trackGuid+':'+aMR.time+':'+notificationId,
+				twonetfitness__Debug_Measurement__c: debugMeasurementText
 			};	
 		}
 		objs[i] = nforce.createSObject('twonetfitness__Measurement__c', sfMeasures[i]);
