@@ -475,7 +475,7 @@ app.get('/register', function(req, res) {
 	res.end();
 });
 
-
+/*
 app.get('/testrest', function(req,res) {
 	var testOrgId = '00Do0000000HrIq'; 
 	
@@ -511,7 +511,7 @@ app.get('/testrest', function(req,res) {
 		
 	}); 
 });
-
+*/
 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
@@ -522,12 +522,28 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 			return callback('Error checking or refreshing authentication in upsertJWTToken: ' + err);
 
 		} else {
-			var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
-				'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
+			//var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
+			//	'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
 				
 			//console.log('URIPath=' + uriPath);
+			
+			//{"TwoNetKey" : "a key", "TwoNetSecret" : "a secret", "JWTToken" : "a token", "OrgId" : "123"}
+			
+			var restBody = {
+				JWTToken: tokenStr,
+				OrgId: orgid, 
+				TwoNetKey: qcKey,
+				TwoNetSecret: qcSecret
+			};
+			var restOpts = {
+				oauth: oauth[orgid].oauthObj, 
+				uri: 'twonetfitness/SetAPIKeys',
+				method: 'POST',
+				body: JSON.stringify(restBody)
+			};
+			
 
-			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: uriPath}, function(err, resp){
+			oauth[orgid].connection.apexRest(restOpts, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
 					return callback('Error calling REST service: ' + err);
