@@ -168,14 +168,14 @@ Connection.prototype.apexRest = function(data, callback) {
 */
 
 app.get('/testrest', function(req,res) {
-	var testOrgId = '00Do0000000HrIq';
+	var testOrgId = '00Do0000000HrIq'; 
 	checkOrRefreshAuthentication(false, testOrgId, function(err) {
 		if (err) {
 			return callback('Error checking or refreshing authentication in testrest: ' + err);
 
 		} else {
 
-			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'SetKeys?jwt=12345'}, function(err, resp){
+			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'twonetfitness/SetKeys?jwt=12345'}, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
 					res.send(500, {status:500, message: 'Internal error.'});
@@ -277,9 +277,9 @@ app.get(redirRoute, function(req, res) {
 
 	oauth[orgid].connection.authenticate({ code: req.query.code}, function(err, resp){
 	  if(!err) {
-		console.log('Access Token: ' + resp.access_token);
+		//console.log('Access Token: ' + resp.access_token);
 		oauth[orgid].oauthObj = resp;
-		console.log('full oauth: ' + JSON.stringify(oauth[orgid].oauthObj));
+		//console.log('full oauth: ' + JSON.stringify(oauth[orgid].oauthObj));
 		
 		// store authentication info to postgres
 		pg.connect(pgConnectionString, function(err, client, done) {
@@ -394,7 +394,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 						return callback('unregistered org or previous authentication failed to store oauth record in postgres');
 					}		
 
-					console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
+					//console.log('retrieved oauth record: ' + JSON.stringify(result.rows[0]));
 
 					if (runlocal == true) {
 						oauth[tOrgId] = {
@@ -422,7 +422,7 @@ function checkOrRefreshAuthentication(refresh, tOrgId, callback) {
 			
 						} else {
 							oauth[tOrgId].oauthObj = resp;
-							console.log('refresh token used data in db appears to have worked. full oauth: ' + JSON.stringify(oauth[tOrgId].oauthObj));
+							//console.log('refresh token used data in db appears to have worked. full oauth: ' + JSON.stringify(oauth[tOrgId].oauthObj));
 							return callback(null);
 						}
 					});
