@@ -633,7 +633,7 @@ function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, 
 				Debug_Measurement__c: debugMeasurementText
 			};	
 		}
-		objs[i] = nforce.createSObject('twonetfitness__.Measurement__c', sfMeasures[i]);
+		objs[i] = nforce.createSObject('twonetfitness__Measurement__c', sfMeasures[i]);
 	}
 	
 /*
