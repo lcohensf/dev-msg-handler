@@ -514,12 +514,10 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: uriPath}, function(err, resp){
 				if (err) {
 					console.log('Error calling REST service: ' + JSON.stringify(err));
-					res.send(500, {status:500, message: 'Internal error.'});
-					res.end();
+					return callback('Error calling REST service: ' + err);
 				} else {
-					console.log('Response from calling SetKeys: ' + JSON.stringify(resp));
-					res.send(200, {status:200, message: 'Ok'});
-					res.end();
+					console.log('Response from calling SetAPIKeys: ' + JSON.stringify(resp));
+					return callback(null);
 				} 
 			});
 		}
