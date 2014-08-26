@@ -487,9 +487,7 @@ app.get('/testrest', function(req,res) {
 			oauth: oauth[testOrgId].oauthObj, 
 			uri: 'twonetfitness/SetKeys',
 			method: 'POST',
-			body: {
-				jwt: '12345'
-			}
+			body: "{jwt: '12345'}"
 			};
 
 			oauth[testOrgId].connection.apexRest(restOpts, function(err, resp){
