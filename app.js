@@ -154,42 +154,6 @@ app.get('/', function(req, res){
 	res.render('index', { title: 'Salesforce - Qualcomm Device Message Handler' });
 
 });
-/*
-Connection.prototype.apexRest = function(data, callback) {
-  // need to specify resource
-  var opts = this._getOpts(data, callback);
-  opts.uri = opts.oauth.instance_url + '/services/apexrest/' + data.uri;
-  opts.method = opts.method || 'GET';
-  if(opts.urlParams) {
-    opts.qs = opts.urlParams;
-  }
-  return this._apiRequest(opts, opts.callback);
-}
-*/
-
-app.get('/testrest', function(req,res) {
-	var testOrgId = '00Do0000000HrIq'; 
-	checkOrRefreshAuthentication(false, testOrgId, function(err) {
-		if (err) {
-			return callback('Error checking or refreshing authentication in testrest: ' + err);
-
-		} else {
-
-			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'twonetfitness/SetKeys?jwt=12345'}, function(err, resp){
-				if (err) {
-					console.log('Error calling REST service: ' + JSON.stringify(err));
-					res.send(500, {status:500, message: 'Internal error.'});
-					res.end();
-				} else {
-					console.log('Response from calling SetKeys: ' + JSON.stringify(resp));
-					res.send(200, {status:200, message: 'Ok'});
-					res.end();
-				} 
-			});
-		}
-		
-	}); 
-});
 
 
 app.get('/authOrg', function(req, res) {
@@ -511,6 +475,59 @@ app.get('/register', function(req, res) {
 	res.end();
 });
 
+/*
+app.get('/testrest', function(req,res) {
+	var testOrgId = '00Do0000000HrIq'; 
+	checkOrRefreshAuthentication(false, testOrgId, function(err) {
+		if (err) {
+			return callback('Error checking or refreshing authentication in testrest: ' + err);
+
+		} else {
+
+			oauth[testOrgId].connection.apexRest({oauth: oauth[testOrgId].oauthObj, uri: 'twonetfitness/SetKeys?jwt=12345'}, function(err, resp){
+				if (err) {
+					console.log('Error calling REST service: ' + JSON.stringify(err));
+					res.send(500, {status:500, message: 'Internal error.'});
+					res.end();
+				} else {
+					console.log('Response from calling SetKeys: ' + JSON.stringify(resp));
+					res.send(200, {status:200, message: 'Ok'});
+					res.end();
+				} 
+			});
+		}
+		
+	}); 
+});
+*/
+
+// upsertJWTToken(token, function(err) ...
+function upsertJWTToken(tokenStr, orgid, callback) {
+	checkOrRefreshAuthentication(false, orgid, function(err) {
+		if (err) {
+			return callback('Error checking or refreshing authentication in upsertJWTToken: ' + err);
+
+		} else {
+			var uriPath = 'twonetfitness/SetAPIKeys?JWTToken=' + tokenStr + '&OrgId=' + orgid + 
+				'&TwoNetKey=' + qcKey + '&TwoNetSecret=' + qcSecret;
+
+			oauth[orgid].connection.apexRest({oauth: oauth[orgid].oauthObj, uri: uriPath}, function(err, resp){
+				if (err) {
+					console.log('Error calling REST service: ' + JSON.stringify(err));
+					res.send(500, {status:500, message: 'Internal error.'});
+					res.end();
+				} else {
+					console.log('Response from calling SetKeys: ' + JSON.stringify(resp));
+					res.send(200, {status:200, message: 'Ok'});
+					res.end();
+				} 
+			});
+		}
+		
+	}); 	
+
+}
+/* original version when app was storing tokens and keys in encrypted fields on force.com 
 // upsertJWTToken(token, function(err) ...
 function upsertJWTToken(tokenStr, orgid, callback) {
 	var tokenRecord = {
@@ -537,7 +554,7 @@ function upsertJWTToken(tokenStr, orgid, callback) {
 	}); 
 
 }
-
+*/
 
 
 function insertMeasures(category, orgid, sf_user_id, trackGuid, notificationId, aMeasureResponse) {
