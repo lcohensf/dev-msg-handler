@@ -1,9 +1,10 @@
-# dev-msg-handler
+# dev-msg-handler 
 
 This node.js application is part of a Salesforce1 Labs "internet of things" app which consists of 
-three components: Force.com 2Net Fitness app, Qualcomm 2net platform, and this node.js application designed for deployment to heroku. 
+three components: Force.com 2Net Fitness app, Qualcomm 2net platform, and this node.js application designed for 
+deployment to heroku. 
 This node.js app processes Qualcomm 2net device notifications and inserts device measurements 
-into corresponding Force.com org.
+into the corresponding Force.com org.
 
 See document "2Net Fitness app setup.pdf" for one time setup instructions of the Force.com app and information on how 
 to obtain the Qualcomm 2net API key and secret pair required for both the 
@@ -39,7 +40,7 @@ Add pgcrypto extension to postgres database:
 Create schema in postgres database by running statements in file "create schema script.txt". 
 
 Set environment variables on heroku. (For the JWTSecret variable, use a random sequence of 
-approximately 20 letters and characters.)
+10 to 20 letters and characters.)
 >heroku config:set REDIRECT_URI=https://your_heroku_app_name.herokuapp.com/oauth/_callback
 >heroku config:set DATABASE_URL=YOUR_POSTGRES_DATABASE_URL_ON_HEROKU
 >heroku config:set QCKey=YOUR_QUALCOMM_KEY
